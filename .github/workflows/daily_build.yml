@@ -2,9 +2,9 @@ name: Daily Calendar Build
 
 on:
   schedule:
-    # Runs at 10:00 UTC every day (which is 3:00 AM Lander time)
+    # Runs at 10:00 UTC every day (3:00 AM Lander time)
     - cron: '0 10 * * *'
-  workflow_dispatch: # Allows you to click a button to run it manually
+  workflow_dispatch: # Allows manual click-to-run
 
 permissions:
   contents: write
@@ -22,7 +22,7 @@ jobs:
         with:
           python-version: '3.9'
 
-      - name: Install Libraries
+      - name: Install Dependencies
         run: |
           pip install -r requirements.txt
           playwright install chromium
@@ -35,12 +35,22 @@ jobs:
           python scrape_cwc.py
           python scrape_lvhs.py
 
-      - name: Build Calendar
+      # --- NEW STEP: Save the Data back to the Repo ---
+      - name: Commit and Push Data
+        run: |
+          git config --global user.name 'Calendar Bot'
+          git config --global user.email 'bot@noreply.github.com'
+          git add *.json
+          # The part below commits changes, but doesn't fail if there are no new events
+          git commit -m "🤖 Daily Data Refresh" || echo "No changes to data"
+          git push
+
+      - name: Build Calendar HTML
         run: python build_calendar.py
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./ # This tells it to publish the folder where index.html was created
-          keep_files: true # Keeps your other files safe
+          publish_dir: ./ # Publish root folder with index.html
+          keep_files: true
