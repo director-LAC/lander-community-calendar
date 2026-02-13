@@ -8,7 +8,10 @@ async def scrape_lvhs_api():
     async with async_playwright() as p:
         print("🚀 Starting LVHS Direct Feed Scraper...")
         
+        # UPDATED: headless=True is required for the cloud environment
         browser = await p.chromium.launch(headless=True)
+        
+        # We create a context to look like a real user (valid User-Agent)
         context = await browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         )
@@ -24,6 +27,7 @@ async def scrape_lvhs_api():
             print(f"📡 Fetching Page {page_num} from School Server...")
             
             try:
+                # Use the browser context to fetch the JSON data securely
                 response = await context.request.get(base_url, params={
                     "slug": "events-lvhs-fremontcsd1wy",
                     "page_no": str(page_num)
