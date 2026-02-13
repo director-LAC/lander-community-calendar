@@ -1,0 +1,32 @@
+name: 🛠️ Manual UI Rebuild Only
+
+# This trigger means "Only run when I click the button"
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      # We only need standard python libraries, not the heavy browser stuff
+      - name: Build Calendar HTML
+        run: python build_calendar.py
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./ # Deploys the updated index.html
+          keep_files: true # CRITICAL: Keeps the JSON files created by the other workflow
