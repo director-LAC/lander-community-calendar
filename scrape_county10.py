@@ -5,7 +5,8 @@ import sys
 
 async def scrape_county10_load_all():
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=False)
+        # UPDATED: headless=True for Cloud Execution
+        browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
 
         print("🌐 Navigating to County 10...")
