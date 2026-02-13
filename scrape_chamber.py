@@ -7,7 +7,8 @@ import sys
 
 async def scrape_chamber_scroll():
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=False)
+        # UPDATED: headless=True for Cloud Execution
+        browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
         
         print("🌐 Navigating to Lander Chamber (Infinite Scroll Mode)...")
