@@ -1,0 +1,46 @@
+name: Daily Calendar Build
+
+on:
+  schedule:
+    # Runs at 10:00 UTC every day (which is 3:00 AM Lander time)
+    - cron: '0 10 * * *'
+  workflow_dispatch: # Allows you to click a button to run it manually
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Libraries
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium
+
+      - name: Run Scrapers
+        run: |
+          python scrape_county10.py
+          python scrape_windriver.py
+          python scrape_chamber.py
+          python scrape_cwc.py
+          python scrape_lvhs.py
+
+      - name: Build Calendar
+        run: python build_calendar.py
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./ # This tells it to publish the folder where index.html was created
+          keep_files: true # Keeps your other files safe
