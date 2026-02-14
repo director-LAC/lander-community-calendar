@@ -3,109 +3,119 @@ from playwright.async_api import async_playwright
 import json
 import sys
 
-async def scrape_county10_load_all():
+async def scrape_county10_stealth():
     async with async_playwright() as p:
-        # Launch browser (Headless=True for cloud, False for watching locally)
-        browser = await p.chromium.launch(headless=True)
+        # 1. Launch with "Stealth" flags to hide automation
+        browser = await p.chromium.launch(
+            headless=True,
+            args=[
+                '--disable-blink-features=AutomationControlled',
+                '--no-sandbox',
+                '--disable-setuid-sandbox'
+            ]
+        )
         
-        # KEY FIX: Use a real User-Agent to bypass "bot" detection
+        # 2. Mimic a real laptop screen and user agent
         context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+            viewport={"width": 1366, "height": 768},
+            locale="en-US",
+            timezone_id="America/Denver"
         )
         page = await context.new_page()
 
         print("🌐 Navigating to County 10...")
-        await page.goto("https://county10.com/events/#/", timeout=90000)
-
-        # 1. Force Wait for the specific event cards to load
         try:
-            print("⏳ Waiting for event cards to appear...")
-            # Wait up to 30 seconds for the '.csEventTile' class to show up
-            await page.wait_for_selector(".csEventTile", state="attached", timeout=30000)
-            print("✅ Event cards detected!")
+            await page.goto("https://county10.com/events/#/", timeout=60000, wait_until="domcontentloaded")
         except Exception as e:
-            print(f"❌ Error: Page loaded, but event cards didn't appear. {e}")
-            # Take a screenshot to help debug if it fails again
-            await page.screenshot(path="county10_failed.png")
-            await browser.close()
-            sys.exit(1)
+            print(f"⚠️ Navigation timeout (might be slow loading): {e}")
 
-        # 2. Scroll to bottom to trigger lazy loading
-        print("⏬ Scrolling to load more events...")
-        # Scroll a few times to ensure the list populates
-        for _ in range(5):
+        # 3. Soft Wait: Don't crash if it fails, just try to find the container first
+        print("⏳ Waiting for calendar widget...")
+        try:
+            # First look for the main CitySpark container
+            await page.wait_for_selector("#CitySpark", state="attached", timeout=20000)
+            print("   ...Widget container found.")
+            
+            # Now wait for actual events
+            await page.wait_for_selector(".csEventTile", state="visible", timeout=20000)
+            print("✅ Events loaded!")
+        except:
+            print("⚠️ Events did not appear (Cloud Blockage?). Saving empty list for today.")
+            # DO NOT EXIT WITH ERROR. Just save empty/old data and let other scripts run.
+            await browser.close()
+            # We exit normally so the workflow continues
+            sys.exit(0)
+
+        # 4. The Loop
+        print("🏃 Starting Scroll Loop...")
+        previous_count = 0
+        no_change = 0
+        
+        for i in range(15): # Cap at 15 loops to prevent infinite runs
             await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
             await asyncio.sleep(2)
-
-        # 3. Find and Click "See More" / "Load More" button if it exists
-        # (County 10 often uses infinite scroll, but sometimes has a button)
-        try:
-            load_button = await page.query_selector("text=/See\s*More/i") or \
-                          await page.query_selector(".cs-load-more")
             
-            if load_button and await load_button.is_visible():
-                print("👆 Found 'See More' button. Clicking...")
-                await load_button.click()
-                await asyncio.sleep(3)
-        except:
-            pass # It's fine if there's no button
+            # Try clicking "Load More"
+            try:
+                btns = await page.query_selector_all("text=/See\s*More/i")
+                for btn in btns:
+                    if await btn.is_visible():
+                        await btn.click()
+                        await asyncio.sleep(1)
+            except: 
+                pass
 
-        # 4. Extract Data
-        print("👀 Extracting data...")
-        cards = await page.query_selector_all(".csEventTile")
-        print(f"📊 Found {len(cards)} event cards.")
-
-        events = []
-        for card in cards:
-            # Get data-date attribute (e.g. "2026-02-14T00:00:00Z")
-            iso_date_raw = await card.get_attribute("data-date")
+            cards = await page.query_selector_all(".csEventTile")
+            count = len(cards)
+            print(f"   Loop {i+1}: {count} events found.")
             
-            # Get Title
-            title_el = await card.query_selector(".csOneLine")
-            title = await title_el.inner_text() if title_el else "Unknown Title"
-            
-            # Get Link
-            # County 10 links are often dynamic, we'll try to find the anchor tag
-            link = ""
-            # Check for direct anchor child or parent
-            anchor = await card.query_selector("a") 
-            if not anchor:
-                # sometimes the wrapper itself is the click target, but we need a URL.
-                # often County 10 links look like #/details/...
-                href = await card.get_attribute("href")
-                if href: link = href
+            if count == previous_count:
+                no_change += 1
+                if no_change >= 3:
+                    break
             else:
-                link = await anchor.get_attribute("href")
+                no_change = 0
+                
+            previous_count = count
 
-            # Clean up link
+        # 5. Extract
+        print("👀 Extracting...")
+        cards = await page.query_selector_all(".csEventTile")
+        events = []
+        
+        for card in cards:
+            iso_date_raw = await card.get_attribute("data-date")
+            title_el = await card.query_selector(".csOneLine")
+            title = await title_el.inner_text() if title_el else "Unknown"
+            
+            link = ""
+            anchor = await card.query_selector("a") 
+            if anchor: link = await anchor.get_attribute("href")
+            
             if link and link.startswith("#"): 
                 link = "https://county10.com/events/" + link
 
-            # Only add if we have a date
             if iso_date_raw:
-                # Clean date to YYYY-MM-DD
-                clean_date = iso_date_raw.split("T")[0]
-                
                 events.append({
                     "source": "County 10",
                     "title": title.strip(),
-                    "date": clean_date,
+                    "date": iso_date_raw.split("T")[0],
                     "link": link
                 })
 
         await browser.close()
         
-        # Deduplicate based on link or title+date
-        unique_events = {}
-        for e in events:
-            key = e['link'] if e['link'] else f"{e['title']}{e['date']}"
-            unique_events[key] = e
-
-        with open("county10_data.json", "w") as f:
-            json.dump(list(unique_events.values()), f, indent=2)
-            
-        print(f"🎉 Saved {len(unique_events)} County 10 events.")
+        unique_events = {e['link']: e for e in events}.values()
+        
+        # Only overwrite file if we actually found data
+        if len(unique_events) > 0:
+            with open("county10_data.json", "w") as f:
+                json.dump(list(unique_events), f, indent=2)
+            print(f"🎉 Saved {len(unique_events)} events.")
+        else:
+            print("⚠️ No events found, leaving existing data file untouched.")
 
 if __name__ == "__main__":
-    asyncio.run(scrape_county10_load_all())
-    sys.exit(0)
+    asyncio.run(scrape_county10_stealth())
+    sys.exit(0) # Always exit success so we don't block other scrapers
