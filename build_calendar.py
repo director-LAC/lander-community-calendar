@@ -117,7 +117,7 @@ final_list = []
 for day_list in master_events.values():
     final_list.extend(day_list)
 
-# --- PART 5: GENERATE HTML (With Fixed Resize Logic) ---
+# --- PART 5: GENERATE HTML (With Shrink-to-Fit Logic) ---
 html_content = f"""
 <!DOCTYPE html>
 <html>
@@ -252,20 +252,39 @@ html_content = f"""
         var currentCategory = 'all';
         var activeSources = ['Lander Chamber', 'LVHS', 'CWC', 'Wind River', 'County 10'];
         var searchTerm = '';
-        var lastWidth = window.innerWidth; // Track width to prevent resize loops
+        var lastWidth = window.innerWidth;
 
-        // --- BROADCAST SYSTEM ---
+        // --- THE "SHRINK-TO-FIT" BROADCASTER ---
         function sendHeight() {{
+            // 1. Force the body to be tiny so we can measure the REAL content height
+            // This prevents the "Ratchet" effect where it never shrinks
+            document.body.style.height = "auto";
+            document.documentElement.style.height = "auto";
+            
+            // 2. Measure
             const height = document.documentElement.scrollHeight;
+            
+            // 3. Broadcast
             window.parent.postMessage({{ frameHeight: height }}, "*");
         }}
 
-        // 1. Send immediately on load
+        // Send on various events
         window.addEventListener('load', sendHeight);
+        window.addEventListener('resize', sendHeight);
         
-        // 2. Send via Observer (Detects content changes like list view)
-        const resizeObserver = new ResizeObserver(sendHeight);
+        // Use observer but debounce it slightly to avoid flicker loops
+        const resizeObserver = new ResizeObserver(entries => {{
+            requestAnimationFrame(sendHeight);
+        }});
         resizeObserver.observe(document.body);
+
+        // Heartbeat to ensure sync
+        let beats = 0;
+        const interval = setInterval(() => {{
+            sendHeight();
+            beats++;
+            if (beats > 6) clearInterval(interval);
+        }}, 500);
 
         document.addEventListener('DOMContentLoaded', function() {{
             var calendarEl = document.getElementById('calendar');
@@ -282,8 +301,6 @@ html_content = f"""
                 }},
                 windowResize: function(view) {{
                     var currentWidth = window.innerWidth;
-                    // FIX: Only change view if we actually crossed the mobile/desktop threshold
-                    // This prevents vertical resizing (from height changes) from resetting the view
                     if ((lastWidth < 768 && currentWidth >= 768) || (lastWidth >= 768 && currentWidth < 768)) {{
                         if (currentWidth < 768) {{
                             calendar.changeView('listMonth');
@@ -294,8 +311,10 @@ html_content = f"""
                     lastWidth = currentWidth;
                     sendHeight();
                 }},
-                eventDidMount: function() {{
-                     setTimeout(sendHeight, 100);
+                datesSet: function() {{
+                    // This fires when user clicks "Next Month" or changes view
+                    // We wait a tiny bit for the new month to render, then resize
+                    setTimeout(sendHeight, 200);
                 }}
             }});
             calendar.render();
@@ -356,4 +375,4 @@ html_content = f"""
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
 
-print(f"\n🎉 UI Updated! Fixed 'List View' snap-back bug.")
+print(f"\n🎉 UI Updated! Added 'Shrink-to-Fit' Resizing.")
