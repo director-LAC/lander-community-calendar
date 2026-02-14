@@ -117,7 +117,7 @@ final_list = []
 for day_list in master_events.values():
     final_list.extend(day_list)
 
-# --- PART 5: GENERATE HTML (With Auto-Resize Messaging) ---
+# --- PART 5: GENERATE HTML (With Fixed Resize Logic) ---
 html_content = f"""
 <!DOCTYPE html>
 <html>
@@ -127,7 +127,7 @@ html_content = f"""
     <title>Lander Events</title>
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
     <style>
-        body {{ font-family: 'Segoe UI', sans-serif; padding: 20px; background: #f0f2f5; color: #333; }}
+        body {{ font-family: 'Segoe UI', sans-serif; padding: 20px; background: #f0f2f5; color: #333; overflow-y: hidden; }}
         
         #header {{ 
             background: white; 
@@ -252,13 +252,19 @@ html_content = f"""
         var currentCategory = 'all';
         var activeSources = ['Lander Chamber', 'LVHS', 'CWC', 'Wind River', 'County 10'];
         var searchTerm = '';
+        var lastWidth = window.innerWidth; // Track width to prevent resize loops
 
-        // --- RESIZE OBSERVER (Broadcasts Height to Squarespace) ---
-        const resizeObserver = new ResizeObserver(entries => {{
-            // Send height to parent window
-            const height = document.body.scrollHeight;
+        // --- BROADCAST SYSTEM ---
+        function sendHeight() {{
+            const height = document.documentElement.scrollHeight;
             window.parent.postMessage({{ frameHeight: height }}, "*");
-        }});
+        }}
+
+        // 1. Send immediately on load
+        window.addEventListener('load', sendHeight);
+        
+        // 2. Send via Observer (Detects content changes like list view)
+        const resizeObserver = new ResizeObserver(sendHeight);
         resizeObserver.observe(document.body);
 
         document.addEventListener('DOMContentLoaded', function() {{
@@ -275,18 +281,21 @@ html_content = f"""
                     if (info.event.url) window.open(info.event.url, "_blank");
                 }},
                 windowResize: function(view) {{
-                    if (window.innerWidth < 768) {{
-                        calendar.changeView('listMonth');
-                    }} else {{
-                        calendar.changeView('dayGridMonth');
+                    var currentWidth = window.innerWidth;
+                    // FIX: Only change view if we actually crossed the mobile/desktop threshold
+                    // This prevents vertical resizing (from height changes) from resetting the view
+                    if ((lastWidth < 768 && currentWidth >= 768) || (lastWidth >= 768 && currentWidth < 768)) {{
+                        if (currentWidth < 768) {{
+                            calendar.changeView('listMonth');
+                        }} else {{
+                            calendar.changeView('dayGridMonth');
+                        }}
                     }}
+                    lastWidth = currentWidth;
+                    sendHeight();
                 }},
-                // Force height check after render
                 eventDidMount: function() {{
-                     setTimeout(() => {{
-                        const height = document.body.scrollHeight;
-                        window.parent.postMessage({{ frameHeight: height }}, "*");
-                     }}, 100);
+                     setTimeout(sendHeight, 100);
                 }}
             }});
             calendar.render();
@@ -295,11 +304,7 @@ html_content = f"""
         function toggleMobileFilters() {{
             var container = document.getElementById('controls-container');
             container.classList.toggle('open');
-            // Notify parent of size change after transition
-            setTimeout(() => {{
-                const height = document.body.scrollHeight;
-                window.parent.postMessage({{ frameHeight: height }}, "*");
-            }}, 350);
+            setTimeout(sendHeight, 350);
         }}
 
         function applyFilters() {{
@@ -319,6 +324,7 @@ html_content = f"""
             
             calendar.removeAllEvents();
             calendar.addEventSource(filtered);
+            setTimeout(sendHeight, 200);
         }}
 
         function setCategory(cat) {{
@@ -350,4 +356,4 @@ html_content = f"""
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
 
-print(f"\n🎉 UI Updated! Added Auto-Grow Broadcast.")
+print(f"\n🎉 UI Updated! Fixed 'List View' snap-back bug.")
