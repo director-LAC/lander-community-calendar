@@ -7,18 +7,6 @@
   },
   {
     "source": "Wind River",
-    "title": "Friday Night Out!",
-    "date": "February 13 @ 6:00 pm",
-    "link": "https://windriver.org/event/friday-night-out/"
-  },
-  {
-    "source": "Wind River",
-    "title": "Wyoming Catholic College\u2019s Annual Lecture Series",
-    "date": "February 13 @ 7:30 pm",
-    "link": "https://windriver.org/event/wyoming-catholic-colleges-annual-lecture-series/"
-  },
-  {
-    "source": "Wind River",
     "title": "Mosaic Mandala Masterclass",
     "date": "February 14 @ 9:00 am",
     "link": "https://windriver.org/event/mosaic-mandala-masterclass/2026-02-14/"
@@ -2356,5 +2344,35 @@
     "title": "Free Play Fridays at the Lander Library",
     "date": "February 19, 2027 @ 10:30 am",
     "link": "https://windriver.org/event/free-play-fridays-at-the-lander-library/2027-02-19/"
+  },
+  {
+    "source": "Wind River",
+    "title": "Friends of the Riverton Branch Library Book Sale",
+    "date": "February 19, 2027 @ 11:00 am",
+    "link": "https://windriver.org/event/friends-of-the-riverton-branch-library-book-sale/2027-02-19/"
+  },
+  {
+    "source": "Wind River",
+    "title": "Lander Art Center: Jam Time",
+    "date": "February 20, 2027 @ 10:00 am",
+    "link": "https://windriver.org/event/lander-art-center-jam-time/2027-02-20/"
+  },
+  {
+    "source": "Wind River",
+    "title": "Stitch & Be Sewcial at the Library",
+    "date": "February 24, 2027 @ 10:00 am",
+    "link": "https://windriver.org/event/stitch-be-sewcial-at-the-library-2/2027-02-24/"
+  },
+  {
+    "source": "Wind River",
+    "title": "Enhanced Story Time at the Lander Library",
+    "date": "February 24, 2027 @ 10:30 am",
+    "link": "https://windriver.org/event/enhanced-story-time-at-the-lander-library/2027-02-24/"
+  },
+  {
+    "source": "Wind River",
+    "title": "Free Play Fridays at the Lander Library",
+    "date": "February 26, 2027 @ 10:30 am",
+    "link": "https://windriver.org/event/free-play-fridays-at-the-lander-library/2027-02-26/"
   }
 ]
