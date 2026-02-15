@@ -125,7 +125,7 @@ final_list = []
 for day_list in master_events.values():
     final_list.extend(day_list)
 
-# --- PART 5: GENERATE HTML (Safe Version) ---
+# --- PART 5: GENERATE HTML ---
 html_content = f"""
 <!DOCTYPE html>
 <html>
@@ -180,25 +180,24 @@ html_content = f"""
         .filter-btn:hover {{ background: #f5f5f5; border-color: #ccc; }}
         .filter-btn.active {{ background: #2c3e50; color: white; border-color: #2c3e50; }}
         
-        /* --- PILL BUTTONS --- */
+        /* --- PILL BUTTONS (Simple Classes) --- */
         .source-toggle {{ 
-            display: flex; align-items: center; gap: 6px; 
+            display: flex; align-items: center; justify-content: center; gap: 6px; 
             cursor: pointer; padding: 6px 14px; 
             border-radius: 20px; font-size: 0.9rem; font-weight: 600;
             user-select: none; transition: all 0.2s;
             border: 2px solid transparent;
         }}
-        .source-toggle input {{ display: none; }}
         
-        /* INACTIVE STATE */
-        .source-toggle {{ background-color: white; border-color: #ddd; color: #888; opacity: 0.8; }}
+        /* Inactive State */
+        .source-toggle.inactive {{ background-color: white; border-color: #ddd; color: #888; opacity: 0.8; }}
         
-        /* ACTIVE STATES */
-        .source-toggle.active.chamber {{ background-color: {SOURCE_COLORS['Lander Chamber']['bg']}; border-color: {SOURCE_COLORS['Lander Chamber']['bg']}; color: white; opacity: 1; }}
-        .source-toggle.active.lvhs {{ background-color: {SOURCE_COLORS['LVHS']['bg']}; border-color: {SOURCE_COLORS['LVHS']['bg']}; color: black; opacity: 1; }}
-        .source-toggle.active.cwc {{ background-color: {SOURCE_COLORS['CWC']['bg']}; border-color: {SOURCE_COLORS['CWC']['bg']}; color: white; opacity: 1; }}
-        .source-toggle.active.wrvc {{ background-color: {SOURCE_COLORS['WRVC']['bg']}; border-color: {SOURCE_COLORS['WRVC']['bg']}; color: white; opacity: 1; }}
-        .source-toggle.active.county10 {{ background-color: {SOURCE_COLORS['County 10']['bg']}; border-color: {SOURCE_COLORS['County 10']['bg']}; color: white; opacity: 1; }}
+        /* Active States */
+        .source-toggle.active.chamber {{ background-color: {SOURCE_COLORS['Lander Chamber']['bg']}; border-color: {SOURCE_COLORS['Lander Chamber']['bg']}; color: white; }}
+        .source-toggle.active.lvhs {{ background-color: {SOURCE_COLORS['LVHS']['bg']}; border-color: {SOURCE_COLORS['LVHS']['bg']}; color: black; }}
+        .source-toggle.active.cwc {{ background-color: {SOURCE_COLORS['CWC']['bg']}; border-color: {SOURCE_COLORS['CWC']['bg']}; color: white; }}
+        .source-toggle.active.wrvc {{ background-color: {SOURCE_COLORS['WRVC']['bg']}; border-color: {SOURCE_COLORS['WRVC']['bg']}; color: white; }}
+        .source-toggle.active.county10 {{ background-color: {SOURCE_COLORS['County 10']['bg']}; border-color: {SOURCE_COLORS['County 10']['bg']}; color: white; }}
 
         #calendar {{ background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); max-width: 1200px; margin: 0 auto; }}
         
@@ -207,11 +206,11 @@ html_content = f"""
         .fc-toolbar-title {{ font-size: 1.5em !important; color: #2c3e50; }}
         .fc-button-primary {{ background-color: #2c3e50 !important; border-color: #2c3e50 !important; }}
         
-        /* --- LIST VIEW TWEAKS --- */
-        /* HIDE the time column (gets rid of 'all-day') */
+        /* --- LIST VIEW CLEANUP --- */
+        /* Completely hide the time column (kills 'all-day') */
         .fc-list-event-time {{ display: none !important; }}
         
-        /* Style for the injected Category Tag */
+        /* Style for the Category Tag */
         .category-tag {{
             font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;
             font-weight: 700; color: #777; background: #eaecf0;
@@ -261,21 +260,11 @@ html_content = f"""
 
             <div class="controls-row">
                 <div class="label">Sources:</div>
-                <div class="source-toggle active chamber" onclick="toggleSourceState(this, 'Lander Chamber')">
-                    Chamber
-                </div>
-                <div class="source-toggle active lvhs" onclick="toggleSourceState(this, 'LVHS')">
-                    High School
-                </div>
-                <div class="source-toggle active cwc" onclick="toggleSourceState(this, 'CWC')">
-                    CWC
-                </div>
-                <div class="source-toggle active wrvc" onclick="toggleSourceState(this, 'WRVC')">
-                    WRVC
-                </div>
-                <div class="source-toggle active county10" onclick="toggleSourceState(this, 'County 10')">
-                    County 10
-                </div>
+                <div class="source-toggle active chamber" onclick="toggleSourceState(this, 'Lander Chamber')">Chamber</div>
+                <div class="source-toggle active lvhs" onclick="toggleSourceState(this, 'LVHS')">High School</div>
+                <div class="source-toggle active cwc" onclick="toggleSourceState(this, 'CWC')">CWC</div>
+                <div class="source-toggle active wrvc" onclick="toggleSourceState(this, 'WRVC')">WRVC</div>
+                <div class="source-toggle active county10" onclick="toggleSourceState(this, 'County 10')">County 10</div>
             </div>
         </div>
     </div>
@@ -322,19 +311,17 @@ html_content = f"""
                 // --- SAFELY INJECT TAG INTO LIST VIEW ONLY ---
                 eventDidMount: function(info) {{
                     if (info.view.type.includes('list')) {{
-                        // Find the title container
+                        // Safely append tag if not present
                         let titleEl = info.el.querySelector('.fc-list-event-title');
                         if (titleEl && !titleEl.querySelector('.category-tag')) {{
-                            // Create the pill
                             let cat = info.event.extendedProps.category || 'Event';
                             let span = document.createElement('span');
                             span.className = 'category-tag';
                             span.innerText = cat;
-                            // Prepend it
                             titleEl.insertBefore(span, titleEl.firstChild);
                         }}
                     }}
-                    // Always trigger height check after render
+                    // Force height check after render
                     setTimeout(sendHeight, 50);
                 }},
                 windowResize: function(view) {{
@@ -363,14 +350,15 @@ html_content = f"""
         }}
 
         function toggleSourceState(labelElement, sourceName) {{
-            labelElement.classList.toggle('active');
-            
+            // Toggle Logic
             if (activeSources.includes(sourceName)) {{
-                // Remove
                 activeSources = activeSources.filter(s => s !== sourceName);
+                labelElement.classList.remove('active');
+                labelElement.classList.add('inactive');
             }} else {{
-                // Add
                 activeSources.push(sourceName);
+                labelElement.classList.remove('inactive');
+                labelElement.classList.add('active');
             }}
             applyFilters();
         }}
@@ -394,7 +382,6 @@ html_content = f"""
             calendar.removeAllEvents();
             calendar.addEventSource(filtered);
 
-            // Logic: Switch to Year List if Searching, otherwise stay put (or revert if clearing)
             if (searchTerm.length > 0 && !isSearchMode) {{
                 isSearchMode = true;
                 calendar.changeView('listYear');
@@ -431,4 +418,4 @@ html_content = f"""
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
 
-print(f"\n🎉 UI Refined! Safe rendering implementation.")
+print(f"\n🎉 UI Stabilized! Reverted unsafe rendering hacks.")
