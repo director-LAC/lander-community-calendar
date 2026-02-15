@@ -180,7 +180,7 @@ html_content = f"""
         .filter-btn:hover {{ background: #f5f5f5; border-color: #ccc; }}
         .filter-btn.active {{ background: #2c3e50; color: white; border-color: #2c3e50; }}
         
-        /* NEW: Source Pills Styling */
+        /* Source Pills */
         .source-toggle {{ 
             display: flex; align-items: center; gap: 6px; 
             cursor: pointer; padding: 6px 14px; 
@@ -188,14 +188,9 @@ html_content = f"""
             user-select: none; transition: all 0.2s;
             border: 2px solid transparent;
         }}
-        
-        /* Hidden default checkbox */
         .source-toggle input {{ display: none; }}
-
-        /* Inactive State (Hollow) */
         .source-toggle {{ background-color: white; border-color: #ddd; color: #888; opacity: 0.8; }}
         
-        /* Active States (Solid Colors) */
         .source-toggle.active.chamber {{ background-color: {SOURCE_COLORS['Lander Chamber']['bg']}; border-color: {SOURCE_COLORS['Lander Chamber']['bg']}; color: white; opacity: 1; }}
         .source-toggle.active.lvhs {{ background-color: {SOURCE_COLORS['LVHS']['bg']}; border-color: {SOURCE_COLORS['LVHS']['bg']}; color: black; opacity: 1; }}
         .source-toggle.active.cwc {{ background-color: {SOURCE_COLORS['CWC']['bg']}; border-color: {SOURCE_COLORS['CWC']['bg']}; color: white; opacity: 1; }}
@@ -203,20 +198,17 @@ html_content = f"""
         .source-toggle.active.county10 {{ background-color: {SOURCE_COLORS['County 10']['bg']}; border-color: {SOURCE_COLORS['County 10']['bg']}; color: white; opacity: 1; }}
 
         #calendar {{ background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); max-width: 1200px; margin: 0 auto; }}
-        .fc-event {{ cursor: pointer; border: none !important; font-size: 0.9em; border-radius: 4px; }}
+        
+        /* FIX: Removed 'border: none' to ensure month view bars render correctly */
+        .fc-event {{ cursor: pointer; font-size: 0.9em; border-radius: 4px; }}
+        .fc-event-title {{ font-weight: 500; }}
         .fc-toolbar-title {{ font-size: 1.5em !important; color: #2c3e50; }}
         .fc-button-primary {{ background-color: #2c3e50 !important; border-color: #2c3e50 !important; }}
         
-        /* CATEGORY TAG IN LIST VIEW */
         .category-tag {{
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            font-weight: 700;
-            color: #888;
-            background: #f0f2f5;
-            padding: 2px 6px;
-            border-radius: 4px;
+            font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;
+            font-weight: 700; color: #888; background: #f0f2f5;
+            padding: 2px 6px; border-radius: 4px;
         }}
 
         @media (max-width: 768px) {{
@@ -290,6 +282,7 @@ html_content = f"""
         var activeSources = ['Lander Chamber', 'LVHS', 'CWC', 'WRVC', 'County 10'];
         var searchTerm = '';
         var lastWidth = window.innerWidth;
+        var isSearchMode = false; // Track if we are in specific search view
 
         // --- RESIZE BROADCASTER ---
         function sendHeight() {{
@@ -303,7 +296,7 @@ html_content = f"""
         window.addEventListener('resize', sendHeight);
         const resizeObserver = new ResizeObserver(() => requestAnimationFrame(sendHeight));
         resizeObserver.observe(document.getElementById('main-wrapper'));
-        setInterval(sendHeight, 1000); // Slow heartbeat
+        setInterval(sendHeight, 1000); 
 
         document.addEventListener('DOMContentLoaded', function() {{
             var calendarEl = document.getElementById('calendar');
@@ -318,17 +311,15 @@ html_content = f"""
                     info.jsEvent.preventDefault();
                     if (info.event.url) window.open(info.event.url, "_blank");
                 }},
-                // --- THIS FIXES THE "ALL DAY" ISSUE ---
+                // --- FIX: Safely render custom content ONLY for List View ---
                 eventContent: function(arg) {{
-                    // Only modify List View
                     if (arg.view.type.includes('list')) {{
                         let cat = arg.event.extendedProps.category || 'Event';
-                        // Create replacement HTML for the time slot
                         let timeText = '<span class="category-tag">' + cat + '</span>';
-                        
-                        // FullCalendar 5/6 method to inject content
                         return {{ html: timeText + '<span style="margin-left:10px; font-weight:600">' + arg.event.title + '</span>' }};
                     }}
+                    // Explicitly return undefined for other views to let FullCalendar handle it
+                    return undefined;
                 }},
                 windowResize: function(view) {{
                     var currentWidth = window.innerWidth;
@@ -355,12 +346,8 @@ html_content = f"""
             setTimeout(sendHeight, 350);
         }}
 
-        // --- NEW: Handle Visual State of Source Buttons ---
         function toggleSourceState(labelElement, sourceName) {{
-            // Toggle Visual Class
             labelElement.classList.toggle('active');
-            
-            // Toggle Logic
             if (activeSources.includes(sourceName)) {{
                 activeSources = activeSources.filter(s => s !== sourceName);
                 labelElement.querySelector('input').checked = false;
@@ -376,7 +363,6 @@ html_content = f"""
                 var catMatch = (currentCategory === 'all' || e.extendedProps.category === currentCategory);
                 var sourceMatch = activeSources.includes(e.extendedProps.source);
                 var searchMatch = true;
-                
                 if (searchTerm) {{
                     var lowerTerm = searchTerm.toLowerCase();
                     var inTitle = e.title.toLowerCase().includes(lowerTerm);
@@ -390,15 +376,20 @@ html_content = f"""
             calendar.removeAllEvents();
             calendar.addEventSource(filtered);
 
-            if (searchTerm.length > 0) {{
+            // --- SMART VIEW SWITCHING ---
+            // Only switch to List Year if we are ACTIVELY searching (typing new chars)
+            // If we are just clicking filters, STAY in the current view.
+            if (searchTerm.length > 0 && !isSearchMode) {{
+                isSearchMode = true;
                 calendar.changeView('listYear');
-            }} else {{
-                if (window.innerWidth < 768 && calendar.view.type !== 'listMonth') {{
-                    calendar.changeView('listMonth');
-                }} else if (window.innerWidth >= 768 && calendar.view.type !== 'dayGridMonth') {{
-                    calendar.changeView('dayGridMonth');
-                }}
+            }} else if (searchTerm.length === 0 && isSearchMode) {{
+                // Only revert if we were previously searching
+                isSearchMode = false;
+                if (window.innerWidth < 768) calendar.changeView('listMonth');
+                else calendar.changeView('dayGridMonth');
+                calendar.today();
             }}
+            
             setTimeout(sendHeight, 200);
         }}
 
@@ -425,4 +416,4 @@ html_content = f"""
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
 
-print(f"\n🎉 UI Refined! Removed 'All-Day' text & Added Solid Source Pills.")
+print(f"\n🎉 UI Refined! Fixed Month View Rendering & View-Switching Logic.")
