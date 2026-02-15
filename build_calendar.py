@@ -5,12 +5,22 @@ import re
 from difflib import SequenceMatcher
 
 # --- CONFIGURATION ---
+# Updated Name: "Wind River" -> "WRVC"
 SOURCE_RANK = {
     "LVHS": 1,
     "Lander Chamber": 2,
     "CWC": 3,
-    "Wind River": 4,
+    "WRVC": 4, 
     "County 10": 5
+}
+
+# Define Colors for consistency in UI and Calendar
+SOURCE_COLORS = {
+    "County 10":      {'bg': '#e91e63', 'text': 'white'},
+    "WRVC":           {'bg': '#3498db', 'text': 'white'},
+    "Lander Chamber": {'bg': '#00b894', 'text': 'white'},
+    "CWC":            {'bg': '#e67e22', 'text': 'white'},
+    "LVHS":           {'bg': '#f1c40f', 'text': 'black'} # Yellow background gets black text
 }
 
 # --- PART 1: DATE PARSER ---
@@ -75,6 +85,7 @@ def add_event_smart(new_event):
                 existing_event['url'] = new_event['url']
                 existing_event['color'] = new_event['color']
                 existing_event['extendedProps']['source'] = new_event['extendedProps']['source']
+                existing_event['textColor'] = new_event['textColor']
             merged = True
             break
     if not merged: master_events[date_key].append(new_event)
@@ -87,21 +98,22 @@ def load_source(filename, source_name):
                 data = json.load(f)
                 for e in data:
                     iso_date = parse_event_date(e['date'], e.get('link', ''))
+                    
+                    # Apply colors from our dictionary
+                    style = SOURCE_COLORS.get(source_name, {'bg': '#3788d8', 'text': 'white'})
+                    
                     event_obj = {
                         "title": e['title'],
                         "start": iso_date,
                         "allDay": True,
                         "url": e.get('link', '#'),
+                        "color": style['bg'],
+                        "textColor": style['text'],
                         "extendedProps": {
                             "source": source_name,
                             "category": get_category(e['title'], source_name)
                         }
                     }
-                    if source_name == "County 10": event_obj['color'] = '#e91e63' 
-                    elif source_name == "Wind River": event_obj['color'] = '#3498db' 
-                    elif source_name == "Lander Chamber": event_obj['color'] = '#00b894' 
-                    elif source_name == "CWC": event_obj['color'] = '#e67e22' 
-                    elif source_name == "LVHS": event_obj['color'] = '#f1c40f'
                     add_event_smart(event_obj)
             print(f"✅ Processed {source_name}")
         except Exception as err:
@@ -110,14 +122,15 @@ def load_source(filename, source_name):
 load_source("lvhs_data.json", "LVHS")
 load_source("chamber_data.json", "Lander Chamber")
 load_source("cwc_data.json", "CWC")
-load_source("windriver_data.json", "Wind River")
+# Renamed "Wind River" to "WRVC" here
+load_source("windriver_data.json", "WRVC")
 load_source("county10_data.json", "County 10")
 
 final_list = []
 for day_list in master_events.values():
     final_list.extend(day_list)
 
-# --- PART 5: GENERATE HTML (With Wrapper Measurement) ---
+# --- PART 5: GENERATE HTML ---
 html_content = f"""
 <!DOCTYPE html>
 <html>
@@ -192,13 +205,43 @@ html_content = f"""
         .filter-btn:hover {{ background: #f5f5f5; border-color: #ccc; }}
         .filter-btn.active {{ background: #2c3e50; color: white; border-color: #2c3e50; }}
         
-        .source-toggle {{ display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 6px 12px; border-radius: 6px; border: 1px solid #eee; background: #fafafa; font-size: 0.9rem; user-select: none; transition: background 0.2s; }}
-        .source-toggle:hover {{ background: #f0f0f0; border-color: #ddd; }}
-        .source-toggle input {{ accent-color: #2c3e50; cursor: pointer; width: 16px; height: 16px; }}
+        /* NEW: Color-Coded Source Pills */
+        .source-toggle {{ 
+            display: flex; 
+            align-items: center; 
+            gap: 6px; 
+            cursor: pointer; 
+            padding: 6px 12px; 
+            border-radius: 20px; /* Pill Shape */
+            border: 1px solid transparent; 
+            font-size: 0.9rem; 
+            font-weight: 500;
+            user-select: none; 
+            transition: opacity 0.2s;
+            color: white; /* Default text color */
+        }}
+        .source-toggle:hover {{ opacity: 0.9; }}
+        .source-toggle input {{ 
+            accent-color: white; 
+            cursor: pointer; 
+            width: 16px; 
+            height: 16px; 
+            margin: 0;
+        }}
         
+        /* Specific Source Colors */
+        .source-chamber {{ background-color: {SOURCE_COLORS['Lander Chamber']['bg']}; color: {SOURCE_COLORS['Lander Chamber']['text']}; }}
+        .source-lvhs {{ background-color: {SOURCE_COLORS['LVHS']['bg']}; color: {SOURCE_COLORS['LVHS']['text']}; }}
+        .source-cwc {{ background-color: {SOURCE_COLORS['CWC']['bg']}; color: {SOURCE_COLORS['CWC']['text']}; }}
+        .source-wrvc {{ background-color: {SOURCE_COLORS['WRVC']['bg']}; color: {SOURCE_COLORS['WRVC']['text']}; }}
+        .source-county10 {{ background-color: {SOURCE_COLORS['County 10']['bg']}; color: {SOURCE_COLORS['County 10']['text']}; }}
+
+        /* When unchecked, we might want to gray them out, but for now we keep them colored so user knows what color matches what */
+        .source-toggle input:not(:checked) + span {{ opacity: 0.5; }}
+
         #calendar {{ background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); max-width: 1200px; margin: 0 auto; }}
         .fc-event {{ cursor: pointer; border: none !important; font-size: 0.9em; border-radius: 4px; }}
-        .fc-event-title {{ color: #fff; text-shadow: 0 0 2px rgba(0,0,0,0.3); font-weight: 500; }}
+        .fc-event-title {{ font-weight: 500; }}
         .fc-toolbar-title {{ font-size: 1.5em !important; color: #2c3e50; }}
         .fc-button-primary {{ background-color: #2c3e50 !important; border-color: #2c3e50 !important; }}
 
@@ -208,7 +251,7 @@ html_content = f"""
             h2 {{ font-size: 1.4rem; margin-bottom: 10px; }}
             #mobile-filter-toggle {{ display: block; }}
             #controls-container {{ max-height: 0; opacity: 0; margin-top: 0; }}
-            #controls-container.open {{ max-height: 500px; opacity: 1; margin-top: 15px; }}
+            #controls-container.open {{ max-height: 800px; opacity: 1; margin-top: 15px; }}
             .controls-row {{ flex-direction: column; align-items: stretch; gap: 8px; }}
             .filter-btn {{ text-align: center; }}
             #calendar {{ padding: 10px; }}
@@ -225,7 +268,7 @@ html_content = f"""
         <div class="search-row">
             <div class="search-wrapper">
                 <span class="search-icon">🔍</span>
-                <input type="text" id="search-input" placeholder="Search events..." onkeyup="handleSearch()" />
+                <input type="text" id="search-input" placeholder="Search events (e.g. 'Christmas', 'Art')..." onkeyup="handleSearch()" />
             </div>
             <button id="mobile-filter-toggle" onclick="toggleMobileFilters()">⚙️ Filters</button>
         </div>
@@ -244,11 +287,11 @@ html_content = f"""
 
             <div class="controls-row">
                 <div class="label">Sources:</div>
-                <label class="source-toggle"><input type="checkbox" checked onchange="toggleSource('Lander Chamber')" /> Chamber</label>
-                <label class="source-toggle"><input type="checkbox" checked onchange="toggleSource('LVHS')" /> High School</label>
-                <label class="source-toggle"><input type="checkbox" checked onchange="toggleSource('CWC')" /> CWC</label>
-                <label class="source-toggle"><input type="checkbox" checked onchange="toggleSource('Wind River')" /> Wind River</label>
-                <label class="source-toggle"><input type="checkbox" checked onchange="toggleSource('County 10')" /> County 10</label>
+                <label class="source-toggle source-chamber"><input type="checkbox" checked onchange="toggleSource('Lander Chamber')" /> Chamber</label>
+                <label class="source-toggle source-lvhs"><input type="checkbox" checked onchange="toggleSource('LVHS')" /> High School</label>
+                <label class="source-toggle source-cwc"><input type="checkbox" checked onchange="toggleSource('CWC')" /> CWC</label>
+                <label class="source-toggle source-wrvc"><input type="checkbox" checked onchange="toggleSource('WRVC')" /> WRVC</label>
+                <label class="source-toggle source-county10"><input type="checkbox" checked onchange="toggleSource('County 10')" /> County 10</label>
             </div>
         </div>
     </div>
@@ -260,32 +303,27 @@ html_content = f"""
         var rawEvents = {json.dumps(final_list)};
         var calendar;
         var currentCategory = 'all';
-        var activeSources = ['Lander Chamber', 'LVHS', 'CWC', 'Wind River', 'County 10'];
+        var activeSources = ['Lander Chamber', 'LVHS', 'CWC', 'WRVC', 'County 10'];
         var searchTerm = '';
         var lastWidth = window.innerWidth;
+        var initialView = window.innerWidth < 768 ? 'listMonth' : 'dayGridMonth';
 
-        // --- THE "WRAPPER" MEASUREMENT FIX ---
         function sendHeight() {{
             const wrapper = document.getElementById('main-wrapper');
-            // Measure the container, NOT the body (which might stretch to fill iframe)
             if (wrapper) {{
                 const height = wrapper.offsetHeight;
                 window.parent.postMessage({{ frameHeight: height }}, "*");
             }}
         }}
 
-        // Send on load/resize
         window.addEventListener('load', sendHeight);
         window.addEventListener('resize', sendHeight);
         
-        // Observe the WRAPPER for changes
         const resizeObserver = new ResizeObserver(entries => {{
-            sendHeight();
+            requestAnimationFrame(sendHeight);
         }});
-        // We observe main-wrapper now, NOT body
         resizeObserver.observe(document.getElementById('main-wrapper'));
 
-        // Heartbeat
         let beats = 0;
         const interval = setInterval(() => {{
             sendHeight();
@@ -295,7 +333,6 @@ html_content = f"""
 
         document.addEventListener('DOMContentLoaded', function() {{
             var calendarEl = document.getElementById('calendar');
-            var initialView = window.innerWidth < 768 ? 'listMonth' : 'dayGridMonth';
 
             calendar = new FullCalendar.Calendar(calendarEl, {{
                 initialView: initialView,
@@ -332,10 +369,12 @@ html_content = f"""
         }}
 
         function applyFilters() {{
+            // 1. FILTERING
             var filtered = rawEvents.filter(e => {{
                 var catMatch = (currentCategory === 'all' || e.extendedProps.category === currentCategory);
                 var sourceMatch = activeSources.includes(e.extendedProps.source);
                 var searchMatch = true;
+                
                 if (searchTerm) {{
                     var lowerTerm = searchTerm.toLowerCase();
                     var inTitle = e.title.toLowerCase().includes(lowerTerm);
@@ -348,6 +387,22 @@ html_content = f"""
             
             calendar.removeAllEvents();
             calendar.addEventSource(filtered);
+
+            // 2. VIEW SWITCHING FOR SEARCH
+            // If searching, switch to 'listYear' to see ALL matches.
+            // If clearing search, revert to standard view.
+            if (searchTerm.length > 0) {{
+                calendar.changeView('listYear');
+            }} else {{
+                // Revert to default based on screen size
+                if (window.innerWidth < 768) {{
+                    calendar.changeView('listMonth');
+                }} else {{
+                    calendar.changeView('dayGridMonth');
+                }}
+                calendar.today(); // Jump back to today
+            }}
+
             setTimeout(sendHeight, 200);
         }}
 
@@ -369,8 +424,13 @@ html_content = f"""
 
         function handleSearch() {{
             var input = document.getElementById('search-input');
-            searchTerm = input.value.trim();
-            applyFilters();
+            var newTerm = input.value.trim();
+            
+            // Only trigger if term actually changed
+            if (newTerm !== searchTerm) {{
+                searchTerm = newTerm;
+                applyFilters();
+            }}
         }}
     </script>
 </body>
@@ -380,4 +440,4 @@ html_content = f"""
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
 
-print(f"\n🎉 UI Updated! Implemented Wrapper Measurement Strategy.")
+print(f"\n🎉 UI Refined! WRVC Renamed, Colors Applied, Search Fixed.")
