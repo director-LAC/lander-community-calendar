@@ -5,7 +5,6 @@ import re
 from difflib import SequenceMatcher
 
 # --- CONFIGURATION ---
-# Updated Name: "Wind River" -> "WRVC"
 SOURCE_RANK = {
     "LVHS": 1,
     "Lander Chamber": 2,
@@ -14,13 +13,12 @@ SOURCE_RANK = {
     "County 10": 5
 }
 
-# Define Colors for consistency in UI and Calendar
 SOURCE_COLORS = {
     "County 10":      {'bg': '#e91e63', 'text': 'white'},
     "WRVC":           {'bg': '#3498db', 'text': 'white'},
     "Lander Chamber": {'bg': '#00b894', 'text': 'white'},
     "CWC":            {'bg': '#e67e22', 'text': 'white'},
-    "LVHS":           {'bg': '#f1c40f', 'text': 'black'} # Yellow background gets black text
+    "LVHS":           {'bg': '#f1c40f', 'text': 'black'}
 }
 
 # --- PART 1: DATE PARSER ---
@@ -84,8 +82,8 @@ def add_event_smart(new_event):
                 existing_event['title'] = new_event['title']
                 existing_event['url'] = new_event['url']
                 existing_event['color'] = new_event['color']
-                existing_event['extendedProps']['source'] = new_event['extendedProps']['source']
                 existing_event['textColor'] = new_event['textColor']
+                existing_event['extendedProps']['source'] = new_event['extendedProps']['source']
             merged = True
             break
     if not merged: master_events[date_key].append(new_event)
@@ -98,8 +96,6 @@ def load_source(filename, source_name):
                 data = json.load(f)
                 for e in data:
                     iso_date = parse_event_date(e['date'], e.get('link', ''))
-                    
-                    # Apply colors from our dictionary
                     style = SOURCE_COLORS.get(source_name, {'bg': '#3788d8', 'text': 'white'})
                     
                     event_obj = {
@@ -122,7 +118,6 @@ def load_source(filename, source_name):
 load_source("lvhs_data.json", "LVHS")
 load_source("chamber_data.json", "Lander Chamber")
 load_source("cwc_data.json", "CWC")
-# Renamed "Wind River" to "WRVC" here
 load_source("windriver_data.json", "WRVC")
 load_source("county10_data.json", "County 10")
 
@@ -143,12 +138,7 @@ html_content = f"""
         html, body {{ height: auto; margin: 0; padding: 0; overflow: hidden; }}
         body {{ font-family: 'Segoe UI', sans-serif; background: #f0f2f5; color: #333; }}
         
-        #main-wrapper {{
-            padding: 20px;
-            display: inline-block;
-            width: 100%;
-            box-sizing: border-box;
-        }}
+        #main-wrapper {{ padding: 20px; display: inline-block; width: 100%; box-sizing: border-box; }}
 
         #header {{ 
             background: white; 
@@ -166,37 +156,22 @@ html_content = f"""
         .search-row {{ margin-bottom: 15px; display: flex; gap: 10px; }}
         .search-wrapper {{ position: relative; width: 100%; }}
         #search-input {{ 
-            width: 100%; 
-            padding: 12px 16px 12px 45px; 
-            border: 1px solid #ddd; 
-            border-radius: 8px; 
-            font-size: 1rem; 
-            box-sizing: border-box; 
+            width: 100%; padding: 12px 16px 12px 45px; 
+            border: 1px solid #ddd; border-radius: 8px; 
+            font-size: 1rem; box-sizing: border-box; 
             transition: border-color 0.2s;
         }}
         #search-input:focus {{ border-color: #2c3e50; outline: none; }}
-        .search-icon {{ 
-            position: absolute; left: 15px; top: 50%; transform: translateY(-50%); 
-            color: #999; font-size: 1.2rem; pointer-events: none;
-        }}
+        .search-icon {{ position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: #999; font-size: 1.2rem; pointer-events: none; }}
 
         #mobile-filter-toggle {{
-            display: none;
-            padding: 12px 16px;
-            background: #f0f2f5;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-            color: #555;
-            white-space: nowrap;
+            display: none; padding: 12px 16px; background: #f0f2f5;
+            border: 1px solid #ddd; border-radius: 8px; cursor: pointer;
+            font-weight: 600; color: #555; white-space: nowrap;
         }}
         #mobile-filter-toggle:hover {{ background: #e4e6e9; }}
 
-        #controls-container {{
-            transition: max-height 0.3s ease-out;
-            overflow: hidden;
-        }}
+        #controls-container {{ transition: max-height 0.3s ease-out; overflow: hidden; }}
 
         .controls-row {{ display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 15px; }}
         .label {{ font-weight: 600; color: #555; font-size: 0.9em; min-width: 80px; text-transform: uppercase; letter-spacing: 0.5px; }}
@@ -205,45 +180,44 @@ html_content = f"""
         .filter-btn:hover {{ background: #f5f5f5; border-color: #ccc; }}
         .filter-btn.active {{ background: #2c3e50; color: white; border-color: #2c3e50; }}
         
-        /* NEW: Color-Coded Source Pills */
+        /* NEW: Source Pills Styling */
         .source-toggle {{ 
-            display: flex; 
-            align-items: center; 
-            gap: 6px; 
-            cursor: pointer; 
-            padding: 6px 12px; 
-            border-radius: 20px; /* Pill Shape */
-            border: 1px solid transparent; 
-            font-size: 0.9rem; 
-            font-weight: 500;
-            user-select: none; 
-            transition: opacity 0.2s;
-            color: white; /* Default text color */
-        }}
-        .source-toggle:hover {{ opacity: 0.9; }}
-        .source-toggle input {{ 
-            accent-color: white; 
-            cursor: pointer; 
-            width: 16px; 
-            height: 16px; 
-            margin: 0;
+            display: flex; align-items: center; gap: 6px; 
+            cursor: pointer; padding: 6px 14px; 
+            border-radius: 20px; font-size: 0.9rem; font-weight: 600;
+            user-select: none; transition: all 0.2s;
+            border: 2px solid transparent;
         }}
         
-        /* Specific Source Colors */
-        .source-chamber {{ background-color: {SOURCE_COLORS['Lander Chamber']['bg']}; color: {SOURCE_COLORS['Lander Chamber']['text']}; }}
-        .source-lvhs {{ background-color: {SOURCE_COLORS['LVHS']['bg']}; color: {SOURCE_COLORS['LVHS']['text']}; }}
-        .source-cwc {{ background-color: {SOURCE_COLORS['CWC']['bg']}; color: {SOURCE_COLORS['CWC']['text']}; }}
-        .source-wrvc {{ background-color: {SOURCE_COLORS['WRVC']['bg']}; color: {SOURCE_COLORS['WRVC']['text']}; }}
-        .source-county10 {{ background-color: {SOURCE_COLORS['County 10']['bg']}; color: {SOURCE_COLORS['County 10']['text']}; }}
+        /* Hidden default checkbox */
+        .source-toggle input {{ display: none; }}
 
-        /* When unchecked, we might want to gray them out, but for now we keep them colored so user knows what color matches what */
-        .source-toggle input:not(:checked) + span {{ opacity: 0.5; }}
+        /* Inactive State (Hollow) */
+        .source-toggle {{ background-color: white; border-color: #ddd; color: #888; opacity: 0.8; }}
+        
+        /* Active States (Solid Colors) */
+        .source-toggle.active.chamber {{ background-color: {SOURCE_COLORS['Lander Chamber']['bg']}; border-color: {SOURCE_COLORS['Lander Chamber']['bg']}; color: white; opacity: 1; }}
+        .source-toggle.active.lvhs {{ background-color: {SOURCE_COLORS['LVHS']['bg']}; border-color: {SOURCE_COLORS['LVHS']['bg']}; color: black; opacity: 1; }}
+        .source-toggle.active.cwc {{ background-color: {SOURCE_COLORS['CWC']['bg']}; border-color: {SOURCE_COLORS['CWC']['bg']}; color: white; opacity: 1; }}
+        .source-toggle.active.wrvc {{ background-color: {SOURCE_COLORS['WRVC']['bg']}; border-color: {SOURCE_COLORS['WRVC']['bg']}; color: white; opacity: 1; }}
+        .source-toggle.active.county10 {{ background-color: {SOURCE_COLORS['County 10']['bg']}; border-color: {SOURCE_COLORS['County 10']['bg']}; color: white; opacity: 1; }}
 
         #calendar {{ background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); max-width: 1200px; margin: 0 auto; }}
         .fc-event {{ cursor: pointer; border: none !important; font-size: 0.9em; border-radius: 4px; }}
-        .fc-event-title {{ font-weight: 500; }}
         .fc-toolbar-title {{ font-size: 1.5em !important; color: #2c3e50; }}
         .fc-button-primary {{ background-color: #2c3e50 !important; border-color: #2c3e50 !important; }}
+        
+        /* CATEGORY TAG IN LIST VIEW */
+        .category-tag {{
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 700;
+            color: #888;
+            background: #f0f2f5;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }}
 
         @media (max-width: 768px) {{
             #main-wrapper {{ padding: 10px; }}
@@ -268,7 +242,7 @@ html_content = f"""
         <div class="search-row">
             <div class="search-wrapper">
                 <span class="search-icon">🔍</span>
-                <input type="text" id="search-input" placeholder="Search events (e.g. 'Christmas', 'Art')..." onkeyup="handleSearch()" />
+                <input type="text" id="search-input" placeholder="Search events..." onkeyup="handleSearch()" />
             </div>
             <button id="mobile-filter-toggle" onclick="toggleMobileFilters()">⚙️ Filters</button>
         </div>
@@ -287,11 +261,21 @@ html_content = f"""
 
             <div class="controls-row">
                 <div class="label">Sources:</div>
-                <label class="source-toggle source-chamber"><input type="checkbox" checked onchange="toggleSource('Lander Chamber')" /> Chamber</label>
-                <label class="source-toggle source-lvhs"><input type="checkbox" checked onchange="toggleSource('LVHS')" /> High School</label>
-                <label class="source-toggle source-cwc"><input type="checkbox" checked onchange="toggleSource('CWC')" /> CWC</label>
-                <label class="source-toggle source-wrvc"><input type="checkbox" checked onchange="toggleSource('WRVC')" /> WRVC</label>
-                <label class="source-toggle source-county10"><input type="checkbox" checked onchange="toggleSource('County 10')" /> County 10</label>
+                <label class="source-toggle active chamber" onclick="toggleSourceState(this, 'Lander Chamber')">
+                    <input type="checkbox" checked /> Chamber
+                </label>
+                <label class="source-toggle active lvhs" onclick="toggleSourceState(this, 'LVHS')">
+                    <input type="checkbox" checked /> High School
+                </label>
+                <label class="source-toggle active cwc" onclick="toggleSourceState(this, 'CWC')">
+                    <input type="checkbox" checked /> CWC
+                </label>
+                <label class="source-toggle active wrvc" onclick="toggleSourceState(this, 'WRVC')">
+                    <input type="checkbox" checked /> WRVC
+                </label>
+                <label class="source-toggle active county10" onclick="toggleSourceState(this, 'County 10')">
+                    <input type="checkbox" checked /> County 10
+                </label>
             </div>
         </div>
     </div>
@@ -306,8 +290,8 @@ html_content = f"""
         var activeSources = ['Lander Chamber', 'LVHS', 'CWC', 'WRVC', 'County 10'];
         var searchTerm = '';
         var lastWidth = window.innerWidth;
-        var initialView = window.innerWidth < 768 ? 'listMonth' : 'dayGridMonth';
 
+        // --- RESIZE BROADCASTER ---
         function sendHeight() {{
             const wrapper = document.getElementById('main-wrapper');
             if (wrapper) {{
@@ -315,24 +299,15 @@ html_content = f"""
                 window.parent.postMessage({{ frameHeight: height }}, "*");
             }}
         }}
-
         window.addEventListener('load', sendHeight);
         window.addEventListener('resize', sendHeight);
-        
-        const resizeObserver = new ResizeObserver(entries => {{
-            requestAnimationFrame(sendHeight);
-        }});
+        const resizeObserver = new ResizeObserver(() => requestAnimationFrame(sendHeight));
         resizeObserver.observe(document.getElementById('main-wrapper'));
-
-        let beats = 0;
-        const interval = setInterval(() => {{
-            sendHeight();
-            beats++;
-            if (beats > 6) clearInterval(interval);
-        }}, 500);
+        setInterval(sendHeight, 1000); // Slow heartbeat
 
         document.addEventListener('DOMContentLoaded', function() {{
             var calendarEl = document.getElementById('calendar');
+            var initialView = window.innerWidth < 768 ? 'listMonth' : 'dayGridMonth';
 
             calendar = new FullCalendar.Calendar(calendarEl, {{
                 initialView: initialView,
@@ -342,6 +317,18 @@ html_content = f"""
                 eventClick: function(info) {{
                     info.jsEvent.preventDefault();
                     if (info.event.url) window.open(info.event.url, "_blank");
+                }},
+                // --- THIS FIXES THE "ALL DAY" ISSUE ---
+                eventContent: function(arg) {{
+                    // Only modify List View
+                    if (arg.view.type.includes('list')) {{
+                        let cat = arg.event.extendedProps.category || 'Event';
+                        // Create replacement HTML for the time slot
+                        let timeText = '<span class="category-tag">' + cat + '</span>';
+                        
+                        // FullCalendar 5/6 method to inject content
+                        return {{ html: timeText + '<span style="margin-left:10px; font-weight:600">' + arg.event.title + '</span>' }};
+                    }}
                 }},
                 windowResize: function(view) {{
                     var currentWidth = window.innerWidth;
@@ -368,8 +355,23 @@ html_content = f"""
             setTimeout(sendHeight, 350);
         }}
 
+        // --- NEW: Handle Visual State of Source Buttons ---
+        function toggleSourceState(labelElement, sourceName) {{
+            // Toggle Visual Class
+            labelElement.classList.toggle('active');
+            
+            // Toggle Logic
+            if (activeSources.includes(sourceName)) {{
+                activeSources = activeSources.filter(s => s !== sourceName);
+                labelElement.querySelector('input').checked = false;
+            }} else {{
+                activeSources.push(sourceName);
+                labelElement.querySelector('input').checked = true;
+            }}
+            applyFilters();
+        }}
+
         function applyFilters() {{
-            // 1. FILTERING
             var filtered = rawEvents.filter(e => {{
                 var catMatch = (currentCategory === 'all' || e.extendedProps.category === currentCategory);
                 var sourceMatch = activeSources.includes(e.extendedProps.source);
@@ -388,21 +390,15 @@ html_content = f"""
             calendar.removeAllEvents();
             calendar.addEventSource(filtered);
 
-            // 2. VIEW SWITCHING FOR SEARCH
-            // If searching, switch to 'listYear' to see ALL matches.
-            // If clearing search, revert to standard view.
             if (searchTerm.length > 0) {{
                 calendar.changeView('listYear');
             }} else {{
-                // Revert to default based on screen size
-                if (window.innerWidth < 768) {{
+                if (window.innerWidth < 768 && calendar.view.type !== 'listMonth') {{
                     calendar.changeView('listMonth');
-                }} else {{
+                }} else if (window.innerWidth >= 768 && calendar.view.type !== 'dayGridMonth') {{
                     calendar.changeView('dayGridMonth');
                 }}
-                calendar.today(); // Jump back to today
             }}
-
             setTimeout(sendHeight, 200);
         }}
 
@@ -413,20 +409,9 @@ html_content = f"""
             applyFilters();
         }}
 
-        function toggleSource(sourceName) {{
-            if (activeSources.includes(sourceName)) {{
-                activeSources = activeSources.filter(s => s !== sourceName);
-            }} else {{
-                activeSources.push(sourceName);
-            }}
-            applyFilters();
-        }}
-
         function handleSearch() {{
             var input = document.getElementById('search-input');
             var newTerm = input.value.trim();
-            
-            // Only trigger if term actually changed
             if (newTerm !== searchTerm) {{
                 searchTerm = newTerm;
                 applyFilters();
@@ -440,4 +425,4 @@ html_content = f"""
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
 
-print(f"\n🎉 UI Refined! WRVC Renamed, Colors Applied, Search Fixed.")
+print(f"\n🎉 UI Refined! Removed 'All-Day' text & Added Solid Source Pills.")
