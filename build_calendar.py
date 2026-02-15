@@ -117,7 +117,7 @@ final_list = []
 for day_list in master_events.values():
     final_list.extend(day_list)
 
-# --- PART 5: GENERATE HTML (With Shrink-to-Fit Logic) ---
+# --- PART 5: GENERATE HTML (With Wrapper Measurement) ---
 html_content = f"""
 <!DOCTYPE html>
 <html>
@@ -127,8 +127,16 @@ html_content = f"""
     <title>Lander Events</title>
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
     <style>
-        body {{ font-family: 'Segoe UI', sans-serif; padding: 20px; background: #f0f2f5; color: #333; overflow-y: hidden; }}
+        html, body {{ height: auto; margin: 0; padding: 0; overflow: hidden; }}
+        body {{ font-family: 'Segoe UI', sans-serif; background: #f0f2f5; color: #333; }}
         
+        #main-wrapper {{
+            padding: 20px;
+            display: inline-block;
+            width: 100%;
+            box-sizing: border-box;
+        }}
+
         #header {{ 
             background: white; 
             padding: 25px; 
@@ -195,7 +203,7 @@ html_content = f"""
         .fc-button-primary {{ background-color: #2c3e50 !important; border-color: #2c3e50 !important; }}
 
         @media (max-width: 768px) {{
-            body {{ padding: 10px; }}
+            #main-wrapper {{ padding: 10px; }}
             #header {{ padding: 15px; margin-bottom: 10px; }}
             h2 {{ font-size: 1.4rem; margin-bottom: 10px; }}
             #mobile-filter-toggle {{ display: block; }}
@@ -210,6 +218,7 @@ html_content = f"""
     </style>
 </head>
 <body>
+<div id="main-wrapper">
     <div id="header">
         <h2>📅 Lander Mega Calendar</h2>
         
@@ -245,6 +254,7 @@ html_content = f"""
     </div>
     
     <div id='calendar'></div>
+</div>
 
     <script>
         var rawEvents = {json.dumps(final_list)};
@@ -254,31 +264,28 @@ html_content = f"""
         var searchTerm = '';
         var lastWidth = window.innerWidth;
 
-        // --- THE "SHRINK-TO-FIT" BROADCASTER ---
+        // --- THE "WRAPPER" MEASUREMENT FIX ---
         function sendHeight() {{
-            // 1. Force the body to be tiny so we can measure the REAL content height
-            // This prevents the "Ratchet" effect where it never shrinks
-            document.body.style.height = "auto";
-            document.documentElement.style.height = "auto";
-            
-            // 2. Measure
-            const height = document.documentElement.scrollHeight;
-            
-            // 3. Broadcast
-            window.parent.postMessage({{ frameHeight: height }}, "*");
+            const wrapper = document.getElementById('main-wrapper');
+            // Measure the container, NOT the body (which might stretch to fill iframe)
+            if (wrapper) {{
+                const height = wrapper.offsetHeight;
+                window.parent.postMessage({{ frameHeight: height }}, "*");
+            }}
         }}
 
-        // Send on various events
+        // Send on load/resize
         window.addEventListener('load', sendHeight);
         window.addEventListener('resize', sendHeight);
         
-        // Use observer but debounce it slightly to avoid flicker loops
+        // Observe the WRAPPER for changes
         const resizeObserver = new ResizeObserver(entries => {{
-            requestAnimationFrame(sendHeight);
+            sendHeight();
         }});
-        resizeObserver.observe(document.body);
+        // We observe main-wrapper now, NOT body
+        resizeObserver.observe(document.getElementById('main-wrapper'));
 
-        // Heartbeat to ensure sync
+        // Heartbeat
         let beats = 0;
         const interval = setInterval(() => {{
             sendHeight();
@@ -312,8 +319,6 @@ html_content = f"""
                     sendHeight();
                 }},
                 datesSet: function() {{
-                    // This fires when user clicks "Next Month" or changes view
-                    // We wait a tiny bit for the new month to render, then resize
                     setTimeout(sendHeight, 200);
                 }}
             }});
@@ -375,4 +380,4 @@ html_content = f"""
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
 
-print(f"\n🎉 UI Updated! Added 'Shrink-to-Fit' Resizing.")
+print(f"\n🎉 UI Updated! Implemented Wrapper Measurement Strategy.")
