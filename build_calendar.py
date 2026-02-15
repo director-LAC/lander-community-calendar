@@ -125,7 +125,7 @@ final_list = []
 for day_list in master_events.values():
     final_list.extend(day_list)
 
-# --- PART 5: GENERATE HTML ---
+# --- PART 5: GENERATE HTML (Safe Version) ---
 html_content = f"""
 <!DOCTYPE html>
 <html>
@@ -180,7 +180,7 @@ html_content = f"""
         .filter-btn:hover {{ background: #f5f5f5; border-color: #ccc; }}
         .filter-btn.active {{ background: #2c3e50; color: white; border-color: #2c3e50; }}
         
-        /* Source Pills */
+        /* --- PILL BUTTONS --- */
         .source-toggle {{ 
             display: flex; align-items: center; gap: 6px; 
             cursor: pointer; padding: 6px 14px; 
@@ -189,8 +189,11 @@ html_content = f"""
             border: 2px solid transparent;
         }}
         .source-toggle input {{ display: none; }}
+        
+        /* INACTIVE STATE */
         .source-toggle {{ background-color: white; border-color: #ddd; color: #888; opacity: 0.8; }}
         
+        /* ACTIVE STATES */
         .source-toggle.active.chamber {{ background-color: {SOURCE_COLORS['Lander Chamber']['bg']}; border-color: {SOURCE_COLORS['Lander Chamber']['bg']}; color: white; opacity: 1; }}
         .source-toggle.active.lvhs {{ background-color: {SOURCE_COLORS['LVHS']['bg']}; border-color: {SOURCE_COLORS['LVHS']['bg']}; color: black; opacity: 1; }}
         .source-toggle.active.cwc {{ background-color: {SOURCE_COLORS['CWC']['bg']}; border-color: {SOURCE_COLORS['CWC']['bg']}; color: white; opacity: 1; }}
@@ -199,16 +202,21 @@ html_content = f"""
 
         #calendar {{ background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); max-width: 1200px; margin: 0 auto; }}
         
-        /* FIX: Removed 'border: none' to ensure month view bars render correctly */
-        .fc-event {{ cursor: pointer; font-size: 0.9em; border-radius: 4px; }}
+        .fc-event {{ cursor: pointer; border: none !important; font-size: 0.9em; border-radius: 4px; }}
         .fc-event-title {{ font-weight: 500; }}
         .fc-toolbar-title {{ font-size: 1.5em !important; color: #2c3e50; }}
         .fc-button-primary {{ background-color: #2c3e50 !important; border-color: #2c3e50 !important; }}
         
+        /* --- LIST VIEW TWEAKS --- */
+        /* HIDE the time column (gets rid of 'all-day') */
+        .fc-list-event-time {{ display: none !important; }}
+        
+        /* Style for the injected Category Tag */
         .category-tag {{
             font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;
-            font-weight: 700; color: #888; background: #f0f2f5;
-            padding: 2px 6px; border-radius: 4px;
+            font-weight: 700; color: #777; background: #eaecf0;
+            padding: 3px 8px; border-radius: 4px; margin-right: 10px;
+            display: inline-block; vertical-align: middle;
         }}
 
         @media (max-width: 768px) {{
@@ -253,21 +261,21 @@ html_content = f"""
 
             <div class="controls-row">
                 <div class="label">Sources:</div>
-                <label class="source-toggle active chamber" onclick="toggleSourceState(this, 'Lander Chamber')">
-                    <input type="checkbox" checked /> Chamber
-                </label>
-                <label class="source-toggle active lvhs" onclick="toggleSourceState(this, 'LVHS')">
-                    <input type="checkbox" checked /> High School
-                </label>
-                <label class="source-toggle active cwc" onclick="toggleSourceState(this, 'CWC')">
-                    <input type="checkbox" checked /> CWC
-                </label>
-                <label class="source-toggle active wrvc" onclick="toggleSourceState(this, 'WRVC')">
-                    <input type="checkbox" checked /> WRVC
-                </label>
-                <label class="source-toggle active county10" onclick="toggleSourceState(this, 'County 10')">
-                    <input type="checkbox" checked /> County 10
-                </label>
+                <div class="source-toggle active chamber" onclick="toggleSourceState(this, 'Lander Chamber')">
+                    Chamber
+                </div>
+                <div class="source-toggle active lvhs" onclick="toggleSourceState(this, 'LVHS')">
+                    High School
+                </div>
+                <div class="source-toggle active cwc" onclick="toggleSourceState(this, 'CWC')">
+                    CWC
+                </div>
+                <div class="source-toggle active wrvc" onclick="toggleSourceState(this, 'WRVC')">
+                    WRVC
+                </div>
+                <div class="source-toggle active county10" onclick="toggleSourceState(this, 'County 10')">
+                    County 10
+                </div>
             </div>
         </div>
     </div>
@@ -282,9 +290,9 @@ html_content = f"""
         var activeSources = ['Lander Chamber', 'LVHS', 'CWC', 'WRVC', 'County 10'];
         var searchTerm = '';
         var lastWidth = window.innerWidth;
-        var isSearchMode = false; // Track if we are in specific search view
+        var isSearchMode = false;
 
-        // --- RESIZE BROADCASTER ---
+        // --- BROADCASTER ---
         function sendHeight() {{
             const wrapper = document.getElementById('main-wrapper');
             if (wrapper) {{
@@ -311,15 +319,23 @@ html_content = f"""
                     info.jsEvent.preventDefault();
                     if (info.event.url) window.open(info.event.url, "_blank");
                 }},
-                // --- FIX: Safely render custom content ONLY for List View ---
-                eventContent: function(arg) {{
-                    if (arg.view.type.includes('list')) {{
-                        let cat = arg.event.extendedProps.category || 'Event';
-                        let timeText = '<span class="category-tag">' + cat + '</span>';
-                        return {{ html: timeText + '<span style="margin-left:10px; font-weight:600">' + arg.event.title + '</span>' }};
+                // --- SAFELY INJECT TAG INTO LIST VIEW ONLY ---
+                eventDidMount: function(info) {{
+                    if (info.view.type.includes('list')) {{
+                        // Find the title container
+                        let titleEl = info.el.querySelector('.fc-list-event-title');
+                        if (titleEl && !titleEl.querySelector('.category-tag')) {{
+                            // Create the pill
+                            let cat = info.event.extendedProps.category || 'Event';
+                            let span = document.createElement('span');
+                            span.className = 'category-tag';
+                            span.innerText = cat;
+                            // Prepend it
+                            titleEl.insertBefore(span, titleEl.firstChild);
+                        }}
                     }}
-                    // Explicitly return undefined for other views to let FullCalendar handle it
-                    return undefined;
+                    // Always trigger height check after render
+                    setTimeout(sendHeight, 50);
                 }},
                 windowResize: function(view) {{
                     var currentWidth = window.innerWidth;
@@ -348,12 +364,13 @@ html_content = f"""
 
         function toggleSourceState(labelElement, sourceName) {{
             labelElement.classList.toggle('active');
+            
             if (activeSources.includes(sourceName)) {{
+                // Remove
                 activeSources = activeSources.filter(s => s !== sourceName);
-                labelElement.querySelector('input').checked = false;
             }} else {{
+                // Add
                 activeSources.push(sourceName);
-                labelElement.querySelector('input').checked = true;
             }}
             applyFilters();
         }}
@@ -363,6 +380,7 @@ html_content = f"""
                 var catMatch = (currentCategory === 'all' || e.extendedProps.category === currentCategory);
                 var sourceMatch = activeSources.includes(e.extendedProps.source);
                 var searchMatch = true;
+                
                 if (searchTerm) {{
                     var lowerTerm = searchTerm.toLowerCase();
                     var inTitle = e.title.toLowerCase().includes(lowerTerm);
@@ -376,14 +394,11 @@ html_content = f"""
             calendar.removeAllEvents();
             calendar.addEventSource(filtered);
 
-            // --- SMART VIEW SWITCHING ---
-            // Only switch to List Year if we are ACTIVELY searching (typing new chars)
-            // If we are just clicking filters, STAY in the current view.
+            // Logic: Switch to Year List if Searching, otherwise stay put (or revert if clearing)
             if (searchTerm.length > 0 && !isSearchMode) {{
                 isSearchMode = true;
                 calendar.changeView('listYear');
             }} else if (searchTerm.length === 0 && isSearchMode) {{
-                // Only revert if we were previously searching
                 isSearchMode = false;
                 if (window.innerWidth < 768) calendar.changeView('listMonth');
                 else calendar.changeView('dayGridMonth');
@@ -416,4 +431,4 @@ html_content = f"""
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
 
-print(f"\n🎉 UI Refined! Fixed Month View Rendering & View-Switching Logic.")
+print(f"\n🎉 UI Refined! Safe rendering implementation.")
