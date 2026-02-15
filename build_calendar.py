@@ -294,20 +294,29 @@ def generate_html(events):
 
     <script>
         var masterEventsList = {json.dumps(fc_events)};
-        var currentFilters = {{ category: 'all', source: 'all', search: '' }};
+        var currentFilters = {{ category: 'all', sources: ['all'], search: '' }};
 
         function applySourceStyles() {{
             document.querySelectorAll('[data-type="source"].filter-btn').forEach(btn => {{
-                if (btn.classList.contains('active')) {{
-                    var color = btn.getAttribute('data-color') || '#3b82f6';
-                    var textColor = btn.getAttribute('data-text') || 'white';
-                    btn.style.backgroundColor = color;
-                    btn.style.color = textColor;
-                    btn.style.borderColor = color;
+                var color = btn.getAttribute('data-color') || '#3b82f6';
+                var textColor = btn.getAttribute('data-text') || 'white';
+                var val = btn.getAttribute('data-value');
+                var isActive = currentFilters.sources.includes(val);
+
+                btn.style.backgroundColor = color;
+                btn.style.color = textColor;
+                btn.style.borderColor = color;
+
+                if (isActive) {{
+                    btn.classList.add('active');
+                    btn.style.opacity = '1';
+                    btn.style.boxShadow = '0 0 0 3px ' + color + '44, 0 4px 6px -1px rgba(0,0,0,0.1)';
+                    btn.style.transform = 'scale(1.05)';
                 }} else {{
-                    btn.style.backgroundColor = 'white';
-                    btn.style.color = '#374151';
-                    btn.style.borderColor = '#e5e7eb';
+                    btn.classList.remove('active');
+                    btn.style.opacity = '0.4';
+                    btn.style.boxShadow = 'none';
+                    btn.style.transform = 'scale(1)';
                 }}
             }});
         }}
@@ -333,13 +342,17 @@ def generate_html(events):
                 }},
                 height: 'auto', 
                 events: function(info, successCallback, failureCallback) {{
-                    // Filter logic inside the event source function
                     var filtered = masterEventsList.filter(function(e) {{
                         if (currentFilters.search) {{
                             var term = currentFilters.search.toLowerCase();
                             if (!e.title.toLowerCase().includes(term)) return false;
                         }}
-                        if (currentFilters.source !== 'all' && e.extendedProps.source !== currentFilters.source) return false;
+                        
+                        // Multi-source filtering
+                        if (!currentFilters.sources.includes('all')) {{
+                            if (!currentFilters.sources.includes(e.extendedProps.source)) return false;
+                        }}
+
                         if (currentFilters.category !== 'all' && !e.extendedProps.categories.includes(currentFilters.category)) return false;
                         return true;
                     }});
@@ -381,13 +394,33 @@ def generate_html(events):
                 btn.addEventListener('click', function() {{
                     var type = this.dataset.type;
                     var val = this.dataset.value;
-                    this.parentElement.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-                    this.classList.add('active');
-                    if (type === 'category') currentFilters.category = val;
-                    if (type === 'source') {{
-                        currentFilters.source = val;
+
+                    if (type === 'category') {{
+                        this.parentElement.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                        this.classList.add('active');
+                        currentFilters.category = val;
+                    }} else if (type === 'source') {{
+                        if (val === 'all') {{
+                            currentFilters.sources = ['all'];
+                        }} else {{
+                            // Remove 'all' if present
+                            currentFilters.sources = currentFilters.sources.filter(s => s !== 'all');
+                            
+                            // Toggle selection
+                            if (currentFilters.sources.includes(val)) {{
+                                currentFilters.sources = currentFilters.sources.filter(s => s !== val);
+                            }} else {{
+                                currentFilters.sources.push(val);
+                            }}
+
+                            // If nothing selected, default to 'all'
+                            if (currentFilters.sources.length === 0) {{
+                                currentFilters.sources = ['all'];
+                            }}
+                        }}
                         applySourceStyles();
                     }}
+                    
                     calendar.refetchEvents();
                     setTimeout(sendHeight, 250);
                 }});
@@ -399,10 +432,10 @@ def generate_html(events):
             }});
 
             document.getElementById('resetFilters').addEventListener('click', function() {{
-                currentFilters = {{ category: 'all', source: 'all', search: '' }};
+                currentFilters = {{ category: 'all', sources: ['all'], search: '' }};
                 document.getElementById('search-input').value = '';
-                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-                document.querySelectorAll('[data-value="all"]').forEach(b => b.classList.add('active'));
+                document.querySelectorAll('[data-type="category"].filter-btn').forEach(b => b.classList.remove('active'));
+                document.querySelector('[data-type="category"][data-value="all"]').classList.add('active');
                 applySourceStyles();
                 calendar.refetchEvents();
             }});
