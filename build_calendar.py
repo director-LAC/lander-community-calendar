@@ -214,7 +214,13 @@ def generate_html(events):
     
     # Generate Pill HTML without literal \n
     cat_pills = " ".join([f'<button class="filter-btn" data-type="category" data-value="{cat}">{cat}</button>' for cat in categories_list])
-    src_pills = " ".join([f'<button class="filter-btn" data-type="source" data-value="{src}">{src}</button>' for src in sources_list])
+    
+    # Generate Source pills with color metadata
+    src_pills_list = []
+    for src in sources_list:
+        color_config = SOURCE_COLORS.get(src, {'bg': '#3788d8', 'text': 'white'})
+        src_pills_list.append(f'<button class="filter-btn" data-type="source" data-value="{src}" data-color="{color_config["bg"]}" data-text="{color_config["text"]}">{src}</button>')
+    src_pills = " ".join(src_pills_list)
 
     html_content = f"""<!DOCTYPE html>
 <html lang='en'>
@@ -235,7 +241,13 @@ def generate_html(events):
       .pills-wrapper {{ display: flex; flex-wrap: wrap; gap: 0.6rem; }}
       .filter-btn {{ padding: 0.35rem 1rem; border-radius: 99px; border: 1px solid #e5e7eb; background: white; color: #374151; font-size: 0.9rem; font-weight: 500; transition: all 0.2s; cursor: pointer; }}
       .filter-btn:hover {{ border-color: #3b82f6; background: #eff6ff; }}
-      .filter-btn.active {{ background: #3b82f6; color: white; border-color: #3b82f6; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3); }}
+      
+      /* Active state for Category pills (Standard Blue) */
+      [data-type="category"].filter-btn.active {{ background: #3b82f6; color: white; border-color: #3b82f6; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3); }}
+      
+      /* Active state for Source pills (Managed by JS/Dynamic) */
+      [data-type="source"].filter-btn.active {{ border-color: transparent; }}
+
       #search-container {{ position: relative; margin-bottom: 1.5rem; }}
       #search-input {{ width: 100%; padding: 0.75rem 1rem; padding-left: 2.5rem; border: 1px solid #d1d5db; border-radius: 0.5rem; font-size: 1rem; shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.05); }}
       .search-icon {{ position: absolute; left: 0.8rem; top: 0.8rem; color: #9ca3af; }}
@@ -267,7 +279,7 @@ def generate_html(events):
             <div class="filter-section">
                 <span class="filter-label">Sources</span>
                 <div class="pills-wrapper" id="source-filters">
-                    <button class="filter-btn active" data-type="source" data-value="all">All</button>
+                    <button class="filter-btn active" data-type="source" data-value="all" data-color="#3b82f6">All</button>
                     {src_pills}
                 </div>
             </div>
@@ -284,6 +296,22 @@ def generate_html(events):
         var masterEventsList = {json.dumps(fc_events)};
         var currentFilters = {{ category: 'all', source: 'all', search: '' }};
 
+        function applySourceStyles() {{
+            document.querySelectorAll('[data-type="source"].filter-btn').forEach(btn => {{
+                if (btn.classList.contains('active')) {{
+                    var color = btn.getAttribute('data-color') || '#3b82f6';
+                    var textColor = btn.getAttribute('data-text') || 'white';
+                    btn.style.backgroundColor = color;
+                    btn.style.color = textColor;
+                    btn.style.borderColor = color;
+                }} else {{
+                    btn.style.backgroundColor = 'white';
+                    btn.style.color = '#374151';
+                    btn.style.borderColor = '#e5e7eb';
+                }}
+            }});
+        }}
+
         function sendHeight() {{
             const wrapper = document.getElementById('main-wrapper');
             if (wrapper) {{
@@ -294,6 +322,7 @@ def generate_html(events):
 
         document.addEventListener('DOMContentLoaded', function() {{
             var calendarEl = document.getElementById('calendar');
+            applySourceStyles();
             
             var calendar = new FullCalendar.Calendar(calendarEl, {{
                 initialView: window.innerWidth < 768 ? 'listYear' : 'dayGridMonth',
@@ -355,7 +384,10 @@ def generate_html(events):
                     this.parentElement.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
                     this.classList.add('active');
                     if (type === 'category') currentFilters.category = val;
-                    if (type === 'source') currentFilters.source = val;
+                    if (type === 'source') {{
+                        currentFilters.source = val;
+                        applySourceStyles();
+                    }}
                     calendar.refetchEvents();
                     setTimeout(sendHeight, 250);
                 }});
@@ -370,9 +402,8 @@ def generate_html(events):
                 currentFilters = {{ category: 'all', source: 'all', search: '' }};
                 document.getElementById('search-input').value = '';
                 document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-                document.querySelectorAll('.active[data-value="all"]').forEach(b => b.classList.add('active')); // wait this is wrong
-                // Fix reset activation
                 document.querySelectorAll('[data-value="all"]').forEach(b => b.classList.add('active'));
+                applySourceStyles();
                 calendar.refetchEvents();
             }});
         }});
