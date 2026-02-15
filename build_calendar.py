@@ -3,6 +3,7 @@ import os
 from datetime import datetime
 import re
 from difflib import SequenceMatcher
+from typing import Dict, List, Any
 
 # --- CONFIGURATION ---
 SOURCE_RANK = {
@@ -22,7 +23,7 @@ SOURCE_COLORS = {
 }
 
 # --- NEW LANDER TAXONOMY & WEIGHTS ---
-CATEGORY_WEIGHTS = {
+CATEGORY_WEIGHTS: Dict[str, Dict[str, Any]] = {
     "Government & Civic": {
         "keywords": ["council", "board", "commission", "trustee", "session", "committee", "legislative", "mayor", "ward"],
         "source_boost": {"Lander Chamber": 1}
@@ -77,7 +78,7 @@ def parse_event_date(date_str, link_str=""):
             fmt = "%b" if len(month) == 3 else "%B"
             year = current_year
             year_match = re.search(r'\d{4}', clean_text)
-            if year_match: year = year_match.group(0)
+            if year_match: year = int(year_match.group(0))
             dt = datetime.strptime(f"{month} {day} {year}", f"{fmt} %d %Y")
             return dt.strftime("%Y-%m-%d")
     except:
@@ -85,75 +86,58 @@ def parse_event_date(date_str, link_str=""):
     return datetime.now().strftime("%Y-%m-%d")
 
 # --- PART 2: SMART CATEGORY SCORING ---
-def get_categories(title, source):
-    """
-    Returns a LIST of categories based on weighted keywords in the title.
-    Primary category is the one with the highest score.
-    'Community & Social' is auto-added for Festivals/Fairs/Parades.
-    """
+def get_categories(title: str, source: str) -> List[str]:
     title_lower = title.lower()
-    scores = {cat: 0 for cat in CATEGORY_WEIGHTS}
+    scores: Dict[str, int] = {cat: 0 for cat in CATEGORY_WEIGHTS}
 
     # 1. Calculate scores
     for cat, data in CATEGORY_WEIGHTS.items():
         # Source Boost
-        matches_source = data["source_boost"].get(source, 0)
-        scores[cat] += matches_source
+        boost_dict = data.get("source_boost", {})
+        if isinstance(boost_dict, dict):
+            scores[cat] += boost_dict.get(source, 0)
         
         # Keyword Match
-        for kw in data["keywords"]:
+        for kw in data.get("keywords", []):
             if kw in title_lower:
                 scores[cat] += 2 
 
     # 2. Determine Categories
-    current_categories = []
+    current_categories: List[str] = []
     
     # Get winner(s)
     active_scores = {k: v for k, v in scores.items() if v > 0}
     if active_scores:
-        primary_cat = max(active_scores, key=active_scores.get)
+        # Use simple lambda for key to avoid .get ambiguity
+        primary_cat = max(active_scores.keys(), key=lambda x: active_scores[x])
         current_categories.append(primary_cat)
     else:
         current_categories.append("Community & Social")
 
-    # 3. Apply "Festival Rule" (Multi-Tagging)
-    # If it's a Fest/Fair/Parade, ensure it's ALSO "Community & Social"
+    # 3. Apply "Festival Rule"
     festival_keywords = ["festival", "fest", "fair", "parade", "celebration", "market"]
     if any(k in title_lower for k in festival_keywords):
         if "Community & Social" not in current_categories:
             current_categories.append("Community & Social")
-
-        # Farmer's Markets are also Food & Drink
         if "market" in title_lower and "Food & Drink" not in current_categories:
              current_categories.append("Food & Drink")
 
     return current_categories
 
 # --- PART 3: ADVANCED DEDUPLICATION ---
-master_events = {} 
+master_events: Dict[str, List[Dict[str, Any]]] = {} 
 
 def is_same_event(evt1, evt2):
-    # 1. URL Match (Strongest Signal)
     if evt1['url'] and evt2['url'] and evt1['url'] != '#' and evt1['url'] == evt2['url']:
         return True
-        
-    # 2. Date Match (Relaxed - ignore time)
-    # We only group by date key in master_events, so we know they are on the "same day" broadly.
-    # But let's verify exact date string matches if formats differ
     if evt1['start'] != evt2['start']: return False
-    
-    # 3. Title Fuzzy Match
     def clean(t): 
-        # Remove common filler words for better matching
         t = t.lower()
-        t = re.sub(r'\\b(the|annual|monthly|weekly|meeting|of)\\b', '', t)
+        t = re.sub(r'\b(the|annual|monthly|weekly|meeting|of)\b', '', t)
         return re.sub(r'[^a-z0-9]', '', t)
-        
     t1, t2 = clean(evt1['title']), clean(evt2['title'])
-    
     if t1 == t2: return True
-    if len(t1) < 5 or len(t2) < 5: return False # Don't fuzzy match short titles
-    
+    if len(t1) < 5 or len(t2) < 5: return False
     return SequenceMatcher(None, t1, t2).ratio() > 0.75
 
 def add_event_smart(new_event):
@@ -162,20 +146,15 @@ def add_event_smart(new_event):
     merged = False
     for existing_event in master_events[date_key]:
         if is_same_event(new_event, existing_event):
-            # Merge Logic: Keep highest rank source
             new_rank = SOURCE_RANK.get(new_event['extendedProps']['source'], 99)
             old_rank = SOURCE_RANK.get(existing_event['extendedProps']['source'], 99)
-            
             if new_rank < old_rank:
-                # Update existing with better data
                 existing_event['title'] = new_event['title']
                 existing_event['url'] = new_event['url']
                 existing_event['color'] = new_event['color']
                 existing_event['textColor'] = new_event['textColor']
                 existing_event['extendedProps']['source'] = new_event['extendedProps']['source']
-                # CHANGED: Use categories list
                 existing_event['extendedProps']['categories'] = new_event['extendedProps']['categories'] 
-            
             merged = True
             break
     if not merged: master_events[date_key].append(new_event)
@@ -189,7 +168,6 @@ def load_source(filename, source_name):
                 for e in data:
                     iso_date = parse_event_date(e['date'], e.get('link', ''))
                     style = SOURCE_COLORS.get(source_name, {'bg': '#3788d8', 'text': 'white'})
-                    
                     event_obj = {
                         "title": e['title'],
                         "start": iso_date,
@@ -199,7 +177,6 @@ def load_source(filename, source_name):
                         "textColor": style['text'],
                         "extendedProps": {
                             "source": source_name,
-                            # CHANGED: Call get_categories
                             "categories": get_categories(e['title'], source_name)
                         }
                     }
@@ -210,31 +187,34 @@ def load_source(filename, source_name):
 
 
 def generate_html(events):
-    # Convert for FullCalendar
     fc_events = []
-    
-    # Color mapping for Sources
+    categories_list = sorted(list(CATEGORY_WEIGHTS.keys()))
+    sources_list = sorted(list(SOURCE_RANK.keys()))
+
     source_colors = {
-        "LVHS": "#f1c40f",       # Yellow
-        "Lander Chamber": "#00b894", # Green/Teal
-        "CWC": "#e67e22",        # Orange
-        "WRVC": "#3498db",       # Blue
-        "County 10": "#e91e63"   # Pink
+        "LVHS": "#f1c40f",
+        "Lander Chamber": "#00b894",
+        "CWC": "#e67e22",
+        "WRVC": "#3498db",
+        "County 10": "#e91e63"
     }
 
     for e in events:
         fc_events.append({
             "title": e["title"],
             "start": e["start"],
-            "allDay": True,
             "url": e["url"],
             "color": source_colors.get(e["extendedProps"]["source"], "#95a5a6"),
             "textColor": "black" if e["extendedProps"]["source"] == "LVHS" else "white",
             "extendedProps": {
                 "source": e["extendedProps"]["source"],
-                "categories": e["extendedProps"]["categories"] # Pass list
+                "categories": e["extendedProps"]["categories"]
             }
         })
+    
+    # Generate Pill HTML without literal \n
+    cat_pills = " ".join([f'<button class="filter-btn" data-type="category" data-value="{cat}">{cat}</button>' for cat in categories_list])
+    src_pills = " ".join([f'<button class="filter-btn" data-type="source" data-value="{src}">{src}</button>' for src in sources_list])
 
     html_content = f"""<!DOCTYPE html>
 <html lang='en'>
@@ -249,52 +229,51 @@ def generate_html(events):
       body {{ font-family: 'Inter', sans-serif; background-color: #f8f9fa; }}
       #calendar {{ max-width: 1100px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }}
       .fc-event {{ cursor: pointer; border: none; }}
-      .filter-group {{ margin-bottom: 0.5rem; }}
-      #main-wrapper {{ padding: 20px; }}
-      @media (max-width: 768px) {{
-          #main-wrapper {{ padding: 10px; }}
-      }}
+      .filter-container {{ background: white; padding: 1.5rem; border-radius: 0.8rem; box-shadow: 0 4px 20px -5px rgb(0 0 0 / 0.1); margin-bottom: 2rem; }}
+      .filter-section {{ margin-bottom: 1.2rem; }}
+      .filter-label {{ display: block; font-size: 0.85rem; font-weight: 700; color: #4b5563; margin-bottom: 0.6rem; text-transform: uppercase; letter-spacing: 0.025em; }}
+      .pills-wrapper {{ display: flex; flex-wrap: wrap; gap: 0.6rem; }}
+      .filter-btn {{ padding: 0.35rem 1rem; border-radius: 99px; border: 1px solid #e5e7eb; background: white; color: #374151; font-size: 0.9rem; font-weight: 500; transition: all 0.2s; cursor: pointer; }}
+      .filter-btn:hover {{ border-color: #3b82f6; background: #eff6ff; }}
+      .filter-btn.active {{ background: #3b82f6; color: white; border-color: #3b82f6; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3); }}
+      #search-container {{ position: relative; margin-bottom: 1.5rem; }}
+      #search-input {{ width: 100%; padding: 0.75rem 1rem; padding-left: 2.5rem; border: 1px solid #d1d5db; border-radius: 0.5rem; font-size: 1rem; shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.05); }}
+      .search-icon {{ position: absolute; left: 0.8rem; top: 0.8rem; color: #9ca3af; }}
+      #main-wrapper {{ padding: 20px; max-width: 1200px; margin: 0 auto; }}
+      @media (max-width: 768px) {{ #main-wrapper {{ padding: 10px; }} }}
     </style>
   </head>
   <body>
     <div id="main-wrapper">
-        <div class="max-w-6xl mx-auto mb-8">
-            <h1 class="text-4xl font-bold text-gray-800 mb-2">Lander Community Calendar</h1>
-            <p class="text-gray-600 mb-6">Aggregated events from LVHS, Chamber, CWC, Wind River, and County 10.</p>
+        <div class="mb-8">
+            <h1 class="text-4xl font-black text-slate-900 mb-2">Lander Community Calendar</h1>
+            <p class="text-slate-500 font-medium whitespace-nowrap overflow-hidden text-ellipsis">Aggregated events from LVHS, Chamber, CWC, Wind River, and County 10.</p>
+        </div>
+
+        <div class="filter-container">
+            <div id="search-container">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="search-input" placeholder="Search events...">
+            </div>
+
+            <div class="filter-section">
+                <span class="filter-label">Categories</span>
+                <div class="pills-wrapper" id="category-filters">
+                    <button class="filter-btn active" data-type="category" data-value="all">All</button>
+                    {cat_pills}
+                </div>
+            </div>
+
+            <div class="filter-section">
+                <span class="filter-label">Sources</span>
+                <div class="pills-wrapper" id="source-filters">
+                    <button class="filter-btn active" data-type="source" data-value="all">All</button>
+                    {src_pills}
+                </div>
+            </div>
             
-            <div class="bg-white p-4 rounded-lg shadow flex flex-wrap gap-6 items-center">
-                
-                <!-- Category Filter -->
-                <div class="filter-group">
-                    <label class="block text-sm font-semibold text-gray-700 mb-1">Category</label>
-                    <select id="categoryFilter" class="p-2 border rounded hover:border-blue-500 focus:ring focus:ring-blue-200 transition">
-                        <option value="all">All Categories</option>
-                        <option value="Government & Civic">Government & Civic</option>
-                        <option value="School & Education">School & Education</option>
-                        <option value="Sports & Outdoors">Sports & Outdoors</option>
-                        <option value="Arts & Culture">Arts & Culture</option>
-                        <option value="Community & Social">Community & Social</option>
-                        <option value="Family & Youth">Family & Youth</option>
-                        <option value="Business & Networking">Business & Networking</option>
-                        <option value="Food & Drink">Food & Drink</option>
-                        <option value="Holiday / Seasonal">Holiday / Seasonal</option>
-                    </select>
-                </div>
-
-                <!-- Source Filter -->
-                <div class="filter-group">
-                    <label class="block text-sm font-semibold text-gray-700 mb-1">Source</label>
-                    <select id="sourceFilter" class="p-2 border rounded hover:border-blue-500 focus:ring focus:ring-blue-200 transition">
-                        <option value="all">All Sources</option>
-                        <option value="LVHS">LVHS</option>
-                        <option value="Lander Chamber">Lander Chamber</option>
-                        <option value="CWC">CWC</option>
-                        <option value="WRVC">Wind River Visitors Council</option>
-                        <option value="County 10">County 10</option>
-                    </select>
-                </div>
-
-                <button id="resetFilters" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded text-gray-700 transition">Reset</button>
+            <div class="flex justify-end pt-2 border-t border-slate-100">
+                 <button id="resetFilters" class="text-xs font-bold text-slate-400 hover:text-blue-500 uppercase tracking-widest transition-colors">Reset All</button>
             </div>
         </div>
 
@@ -302,9 +281,9 @@ def generate_html(events):
     </div>
 
     <script>
-        var rawEvents = {json.dumps(fc_events)};
+        var masterEventsList = {json.dumps(fc_events)};
+        var currentFilters = {{ category: 'all', source: 'all', search: '' }};
 
-        // --- BROADCASTER (Iframe Resizer) ---
         function sendHeight() {{
             const wrapper = document.getElementById('main-wrapper');
             if (wrapper) {{
@@ -312,127 +291,95 @@ def generate_html(events):
                 window.parent.postMessage({{ frameHeight: height }}, "*");
             }}
         }}
-        window.addEventListener('load', sendHeight);
-        window.addEventListener('resize', sendHeight);
-        const resizeObserver = new ResizeObserver(() => requestAnimationFrame(sendHeight));
-        resizeObserver.observe(document.getElementById('main-wrapper'));
-        setInterval(sendHeight, 1000); 
 
         document.addEventListener('DOMContentLoaded', function() {{
             var calendarEl = document.getElementById('calendar');
-            var categoryFilter = document.getElementById('categoryFilter');
-            var sourceFilter = document.getElementById('sourceFilter');
-            var resetBtn = document.getElementById('resetFilters');
             
-            // Default to Year list on mobile or if previously selected
-            var initialView = window.innerWidth < 768 ? 'listYear' : 'dayGridMonth';
-
-            // --- FILTERING LOGIC ---
-            function getFilterValues() {{
-                return {{
-                    category: categoryFilter.value,
-                    source: sourceFilter.value
-                }};
-            }}
-
-            function filterEvents(events) {{
-                var filters = getFilterValues();
-                return events.filter(function(event) {{
-                    // Source Filter
-                    if (filters.source !== 'all' && event.extendedProps.source !== filters.source) {{
-                        return false;
-                    }}
-                    
-                    // Category Filter (Multi-tag support)
-                    if (filters.category !== 'all') {{
-                        if (!event.extendedProps.categories.includes(filters.category)) {{
-                            return false;
-                        }}
-                    }}
-                    
-                    return true;
-                }});
-            }}
-
             var calendar = new FullCalendar.Calendar(calendarEl, {{
-                initialView: initialView,
+                initialView: window.innerWidth < 768 ? 'listYear' : 'dayGridMonth',
                 headerToolbar: {{
                     left: 'prev,next today',
                     center: 'title',
                     right: 'dayGridMonth,listYear'
                 }},
-                height: 'auto', // Allow it to grow, don't scroll internally
-                events: rawEvents,
+                height: 'auto', 
+                events: function(info, successCallback, failureCallback) {{
+                    // Filter logic inside the event source function
+                    var filtered = masterEventsList.filter(function(e) {{
+                        if (currentFilters.search) {{
+                            var term = currentFilters.search.toLowerCase();
+                            if (!e.title.toLowerCase().includes(term)) return false;
+                        }}
+                        if (currentFilters.source !== 'all' && e.extendedProps.source !== currentFilters.source) return false;
+                        if (currentFilters.category !== 'all' && !e.extendedProps.categories.includes(currentFilters.category)) return false;
+                        return true;
+                    }});
+                    successCallback(filtered);
+                }},
                 eventClick: function(info) {{
                     info.jsEvent.preventDefault();
-                    if (info.event.url) {{
-                        window.open(info.event.url);
-                    }}
+                    if (info.event.url) window.open(info.event.url);
                 }},
                 eventDidMount: function(info) {{
-                    // Tooltip
                     info.el.title = info.event.title + " (" + info.event.extendedProps.source + ")";
-                    
-                    // Replace "all-day" with tags in List View
-                    if (info.view.type === 'listYear' || info.view.type === 'listMonth') {{
+                    if (info.view.type.includes('list')) {{
                         var timeEl = info.el.querySelector('.fc-list-event-time');
                         if (timeEl) {{
-                            timeEl.innerText = ''; // Clear "all-day"
+                            timeEl.innerText = '';
                             var cats = info.event.extendedProps.categories;
-                            if (cats && cats.length > 0) {{
-                                cats.forEach(function(cat) {{
-                                    var span = document.createElement('span');
-                                    span.innerText = cat;
-                                    // Style logic (could be improved with a map, but hardcoding broad colors for now)
-                                    var bg = '#e2e8f0'; // default gray
-                                    var text = '#475569';
-                                    
-                                    if (cat.includes('Sports')) {{ bg = '#dcfce7'; text = '#166534'; }} // green
-                                    else if (cat.includes('Arts')) {{ bg = '#fce7f3'; text = '#9d174d'; }} // pink
-                                    else if (cat.includes('Community')) {{ bg = '#dbeafe'; text = '#1e40af'; }} // blue
-                                    else if (cat.includes('School')) {{ bg = '#fef9c3'; text = '#854d0e'; }} // yellow
-                                    else if (cat.includes('Food')) {{ bg = '#ffedd5'; text = '#9a3412'; }} // orange
-                                    else if (cat.includes('Business')) {{ bg = '#f3f4f6'; text = '#1f2937'; }} // gray-dark
-                                    
-                                    span.style.cssText = 'display: inline-block; padding: 2px 6px; margin-right: 4px; border-radius: 4px; font-size: 0.75em; font-weight: 600; text-transform: uppercase; background-color: ' + bg + '; color: ' + text + ';';
-                                    timeEl.appendChild(span);
-                                }});
-                            }}
+                            (cats || []).forEach(function(cat) {{
+                                var span = document.createElement('span');
+                                span.innerText = cat;
+                                var bg = '#f1f5f9'; var text = '#475569';
+                                if (cat.includes('Sports')) {{ bg = '#dcfce7'; text = '#166534'; }}
+                                else if (cat.includes('Arts')) {{ bg = '#fce7f3'; text = '#9d174d'; }}
+                                else if (cat.includes('Community')) {{ bg = '#dbeafe'; text = '#1e40af'; }}
+                                else if (cat.includes('School')) {{ bg = '#fef9c3'; text = '#854d0e'; }}
+                                else if (cat.includes('Food')) {{ bg = '#ffedd5'; text = '#9a3412'; }}
+                                span.style.cssText = 'display: inline-block; padding: 2px 8px; margin-right: 4px; border-radius: 12px; font-size: 0.7em; font-weight: 700; text-transform: uppercase; background:' + bg + '; color:' + text + ';';
+                                timeEl.appendChild(span);
+                            }});
                         }}
                     }}
                 }},
-                datesSet: function() {{
-                    setTimeout(sendHeight, 200);
-                }},
-                windowResize: function(view) {{
-                    if (window.innerWidth < 768) {{
-                        calendar.changeView('listYear');
-                    }} else {{
-                        calendar.changeView('dayGridMonth');
-                    }}
-                }}
+                datesSet: function() {{ setTimeout(sendHeight, 200); }}
             }});
 
             calendar.render();
 
-            // --- EVENT LISTENERS ---
-            function applyFilters() {{
-                var filtered = filterEvents(rawEvents);
-                calendar.removeAllEvents();
-                calendar.addEventSource(filtered);
-                calendar.render(); 
-                setTimeout(sendHeight, 200);
-            }}
+            // Filter Handlers
+            document.querySelectorAll('.filter-btn').forEach(btn => {{
+                btn.addEventListener('click', function() {{
+                    var type = this.dataset.type;
+                    var val = this.dataset.value;
+                    this.parentElement.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    if (type === 'category') currentFilters.category = val;
+                    if (type === 'source') currentFilters.source = val;
+                    calendar.refetchEvents();
+                    setTimeout(sendHeight, 250);
+                }});
+            }});
 
-            categoryFilter.addEventListener('change', applyFilters);
-            sourceFilter.addEventListener('change', applyFilters);
+            document.getElementById('search-input').addEventListener('input', function(e) {{
+                currentFilters.search = e.target.value;
+                calendar.refetchEvents();
+            }});
 
-            resetBtn.addEventListener('click', function() {{
-                categoryFilter.value = 'all';
-                sourceFilter.value = 'all';
-                applyFilters();
+            document.getElementById('resetFilters').addEventListener('click', function() {{
+                currentFilters = {{ category: 'all', source: 'all', search: '' }};
+                document.getElementById('search-input').value = '';
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.active[data-value="all"]').forEach(b => b.classList.add('active')); // wait this is wrong
+                // Fix reset activation
+                document.querySelectorAll('[data-value="all"]').forEach(b => b.classList.add('active'));
+                calendar.refetchEvents();
             }});
         }});
+
+        window.addEventListener('load', sendHeight);
+        window.addEventListener('resize', sendHeight);
+        new ResizeObserver(() => sendHeight()).observe(document.getElementById('main-wrapper'));
     </script>
   </body>
 </html>"""
@@ -440,30 +387,15 @@ def generate_html(events):
     with open("index.html", "w", encoding="utf-8") as f:
         f.write(html_content)
 
-
 def main():
     load_source("lvhs_data.json", "LVHS")
     load_source("chamber_data.json", "Lander Chamber")
     load_source("cwc_data.json", "CWC")
     load_source("windriver_data.json", "WRVC")
     load_source("county10_data.json", "County 10")
-
-    final_list = []
-    for day_list in master_events.values():
-        final_list.extend(day_list)
-        
-    # Debug output
-    print(f"Total Unique Events: {len(final_list)}")
-    from collections import Counter
-    cats = Counter()
-    for e in final_list:
-        if 'categories' in e['extendedProps']:
-            for c in e['extendedProps']['categories']:
-                cats[c] += 1
-    print("Category Distribution:", cats)
-    
+    final_list = [e for dl in master_events.values() for e in dl]
+    print(f"Total Unique Events: {{len(final_list)}}")
     generate_html(final_list)
-    print("Generated index.html")
 
 if __name__ == "__main__":
     main()
