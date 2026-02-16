@@ -231,8 +231,8 @@ def generate_html(events):
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-      html, body {{ height: auto; margin: 0; padding: 0; overflow-y: auto; }} 
-      body {{ font-family: 'Inter', sans-serif; background-color: #f8f9fa; }}
+      html, body {{ margin: 0; padding: 0; min-height: 100%; background-color: #f8f9fa; }}
+      body {{ font-family: 'Inter', sans-serif; -webkit-overflow-scrolling: touch; }}
       #calendar {{ max-width: 1100px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }}
       .fc-event {{ cursor: pointer; border: none; }}
       .filter-container {{ background: white; padding: 1.5rem; border-radius: 0.8rem; box-shadow: 0 4px 20px -5px rgb(0 0 0 / 0.1); margin-bottom: 2rem; }}
@@ -242,36 +242,37 @@ def generate_html(events):
       .filter-btn {{ padding: 0.35rem 1rem; border-radius: 99px; border: 1px solid #e5e7eb; background: white; color: #374151; font-size: 0.9rem; font-weight: 500; transition: all 0.2s; cursor: pointer; }}
       .filter-btn:hover {{ border-color: #3b82f6; background: #eff6ff; }}
       
-      /* Active state for Category pills (Standard Blue) */
+      /* Active state for Category pills */
       [data-type="category"].filter-btn.active {{ background: #3b82f6; color: white; border-color: #3b82f6; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3); }}
       
-      /* Active state for Source pills (Managed by JS/Dynamic) */
+      /* Active state for Source pills */
       [data-type="source"].filter-btn.active {{ border-color: transparent; }}
 
       #search-container {{ position: relative; margin-bottom: 1.5rem; }}
       #search-input {{ width: 100%; padding: 0.75rem 1rem; padding-left: 2.5rem; border: 1px solid #d1d5db; border-radius: 0.5rem; font-size: 1rem; box-shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.05); }}
       .search-icon {{ position: absolute; left: 0.8rem; top: 0.8rem; color: #9ca3af; }}
-      #main-wrapper {{ padding: 20px; max-width: 1200px; margin: 0 auto; }}
+      #main-wrapper {{ padding: 20px; max-width: 1200px; margin: 0 auto; overflow-x: hidden; }}
       
       @media (max-width: 768px) {{ 
         #main-wrapper {{ padding: 10px; }}
-        .filter-container {{ display: none; margin-bottom: 1rem; }}
-        .filter-container.show {{ display: block; }}
-        #mobile-filter-toggle {{ display: block; }}
+        .filter-container {{ display: none; margin-bottom: 1.5rem; padding: 1rem; }}
+        .filter-container.show {{ display: block !important; }}
+        #mobile-filter-toggle {{ display: flex !important; }}
         .fc-toolbar {{ flex-direction: column; gap: 10px; }}
+        #calendar {{ padding: 10px; }}
       }}
       @media (min-width: 769px) {{ #mobile-filter-toggle {{ display: none; }} }}
     </style>
   </head>
   <body>
     <div id="main-wrapper">
-        <div class="mb-8">
-            <h1 class="text-4xl font-black text-slate-900 mb-2">Lander Community Calendar</h1>
-            <p class="text-slate-500 font-medium whitespace-nowrap overflow-hidden text-ellipsis">Aggregated events from LVHS, Chamber, CWC, Wind River, and County 10.</p>
+        <div class="mb-6">
+            <h1 class="text-3xl md:text-4xl font-black text-slate-900 mb-1">Lander Community Calendar</h1>
+            <p class="text-slate-500 font-medium text-sm md:text-base">Aggregated events from local community sources.</p>
         </div>
 
-        <button id="mobile-filter-toggle" class="w-full bg-slate-800 text-white font-bold py-3 px-4 rounded-lg mb-4 flex justify-between items-center">
-            <span>🔍 Filters & Search</span>
+        <button id="mobile-filter-toggle" class="w-full bg-slate-800 text-white font-bold py-3 px-4 rounded-lg mb-4 flex justify-between items-center shadow-lg active:scale-95 transition-transform" style="display:none;">
+            <span>🔍 Search & Filters</span>
             <span id="toggle-icon">▼</span>
         </button>
 
@@ -308,6 +309,7 @@ def generate_html(events):
     <script>
         var masterEventsList = {json.dumps(fc_events)};
         var currentFilters = {{ category: 'all', sources: ['all'], search: '' }};
+        var calendar; // Global calendar instance
 
         function applySourceStyles() {{
             document.querySelectorAll('[data-type="source"].filter-btn').forEach(btn => {{
@@ -337,34 +339,42 @@ def generate_html(events):
         function sendHeight() {{
             const wrapper = document.getElementById('main-wrapper');
             if (wrapper) {{
-                const height = wrapper.offsetHeight;
+                const height = wrapper.scrollHeight;
                 window.parent.postMessage({{ frameHeight: height }}, "*");
             }}
         }}
 
         document.addEventListener('DOMContentLoaded', function() {{
-            // Mobile toggle logic
             const toggleBtn = document.getElementById('mobile-filter-toggle');
             const filterPanel = document.getElementById('filter-panel');
             const toggleIcon = document.getElementById('toggle-icon');
 
             toggleBtn.addEventListener('click', function() {{
                 filterPanel.classList.toggle('show');
-                toggleIcon.innerText = filterPanel.classList.contains('show') ? '▲' : '▼';
-                setTimeout(sendHeight, 300);
+                const isShowing = filterPanel.classList.contains('show');
+                toggleIcon.innerText = isShowing ? '▲' : '▼';
+                
+                // Recalculate layout
+                if (calendar) {{
+                    setTimeout(() => {{ 
+                        calendar.updateSize();
+                        sendHeight();
+                    }}, 10);
+                }}
             }});
 
             var calendarEl = document.getElementById('calendar');
             applySourceStyles();
             
-            var calendar = new FullCalendar.Calendar(calendarEl, {{
+            calendar = new FullCalendar.Calendar(calendarEl, {{
                 initialView: window.innerWidth < 768 ? 'listYear' : 'dayGridMonth',
                 headerToolbar: {{
                     left: 'prev,next today',
                     center: 'title',
                     right: 'dayGridMonth,listYear'
                 }},
-                height: 'auto', 
+                height: 'auto',
+                handleWindowResize: true,
                 events: function(info, successCallback, failureCallback) {{
                     var filtered = masterEventsList.filter(function(e) {{
                         if (currentFilters.search) {{
@@ -372,7 +382,6 @@ def generate_html(events):
                             if (!e.title.toLowerCase().includes(term)) return false;
                         }}
                         
-                        // Multi-source filtering
                         if (!currentFilters.sources.includes('all')) {{
                             if (!currentFilters.sources.includes(e.extendedProps.source)) return false;
                         }}
@@ -389,12 +398,15 @@ def generate_html(events):
                 eventDidMount: function(info) {{
                     info.el.title = info.event.title + " (" + info.event.extendedProps.source + ")";
                     if (info.view.type.includes('list')) {{
-                        // Support list view items
                         var titleEl = info.el.querySelector('.fc-list-event-title');
                         if (titleEl) {{
-                            // Prepend tags to title without breaking the title cell
+                            // Clear existing tags potentially injected by previous mounts
+                            const existingTags = titleEl.querySelector('.event-tags');
+                            if (existingTags) existingTags.remove();
+
                             var tagContainer = document.createElement('div');
-                            tagContainer.style.marginBottom = '4px';
+                            tagContainer.className = 'event-tags';
+                            tagContainer.style.marginBottom = '2px';
                             
                             var cats = info.event.extendedProps.categories;
                             (cats || []).forEach(function(cat) {{
@@ -406,11 +418,10 @@ def generate_html(events):
                                 else if (cat.includes('Community')) {{ bg = '#dbeafe'; text = '#1e40af'; }}
                                 else if (cat.includes('School')) {{ bg = '#fef9c3'; text = '#854d0e'; }}
                                 else if (cat.includes('Food')) {{ bg = '#ffedd5'; text = '#9a3412'; }}
-                                span.style.cssText = 'display: inline-block; padding: 1px 6px; margin-right: 4px; border-radius: 4px; font-size: 0.65em; font-weight: 700; text-transform: uppercase; background:' + bg + '; color:' + text + ';';
+                                span.style.cssText = 'display: inline-block; padding: 0px 5px; margin-right: 3px; border-radius: 3px; font-size: 0.6em; font-weight: 800; text-transform: uppercase; background:' + bg + '; color:' + text + ';line-height:1.4;';
                                 tagContainer.appendChild(span);
                             }});
                             
-                            // Insert before the title text link
                             var link = titleEl.querySelector('a');
                             if (link) {{
                                 titleEl.insertBefore(tagContainer, link);
