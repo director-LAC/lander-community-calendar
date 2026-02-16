@@ -3,7 +3,7 @@ import os
 from datetime import datetime
 import re
 from difflib import SequenceMatcher
-from typing import Dict, List, Any
+# No typing needed
 
 # --- CONFIGURATION ---
 SOURCE_RANK = {
@@ -23,7 +23,7 @@ SOURCE_COLORS = {
 }
 
 # --- NEW LANDER TAXONOMY & WEIGHTS ---
-CATEGORY_WEIGHTS: Dict[str, Dict[str, Any]] = {
+CATEGORY_WEIGHTS = {
     "Government & Civic": {
         "keywords": ["council", "board", "commission", "trustee", "session", "committee", "legislative", "mayor", "ward"],
         "source_boost": {"Lander Chamber": 1}
@@ -86,31 +86,36 @@ def parse_event_date(date_str, link_str=""):
     return datetime.now().strftime("%Y-%m-%d")
 
 # --- PART 2: SMART CATEGORY SCORING ---
-def get_categories(title: str, source: str) -> List[str]:
+def get_categories(title, source):
     title_lower = title.lower()
-    scores: Dict[str, int] = {cat: 0 for cat in CATEGORY_WEIGHTS}
-
-    # 1. Calculate scores
-    for cat, data in CATEGORY_WEIGHTS.items():
-        # Source Boost
-        boost_dict = data.get("source_boost", {})
-        if isinstance(boost_dict, dict):
-            scores[cat] += boost_dict.get(source, 0)
-        
-        # Keyword Match
-        for kw in data.get("keywords", []):
-            if kw in title_lower:
-                scores[cat] += 2 
-
-    # 2. Determine Categories
-    current_categories: List[str] = []
     
-    # Get winner(s)
-    active_scores = {k: v for k, v in scores.items() if v > 0}
-    if active_scores:
-        # Use simple lambda for key to avoid .get ambiguity
-        primary_cat = max(active_scores.keys(), key=lambda x: active_scores[x])
-        current_categories.append(primary_cat)
+    # Use a list of tuples to avoid dictionary-access linter bugs
+    scoring_results = []
+    
+    for cat, data in CATEGORY_WEIGHTS.items():
+        # 1. Source Boost
+        boost_data = data.get("source_boost", {})
+        boost_val = 0
+        if isinstance(boost_data, dict):
+            boost_val = boost_data.get(source, 0)
+            
+        # 2. Keyword Match
+        keywords = data.get("keywords", [])
+        kw_matches = [k for k in keywords if k in title_lower]
+        keyword_score = len(kw_matches) * 2
+        
+        total_score = boost_val + keyword_score
+        scoring_results.append((cat, total_score))
+        
+    # Determine winner
+    active_winners = [x for x in scoring_results if x[1] > 0]
+    
+    current_categories = []
+    if active_winners:
+        # Sort by score desc
+        active_winners.sort(key=lambda x: x[1], reverse=True)
+        primary = active_winners[0][0]
+        current_categories.append(primary)
     else:
         current_categories.append("Community & Social")
 
@@ -125,7 +130,7 @@ def get_categories(title: str, source: str) -> List[str]:
     return current_categories
 
 # --- PART 3: ADVANCED DEDUPLICATION ---
-master_events: Dict[str, List[Dict[str, Any]]] = {} 
+stored_events = dict() 
 
 def is_same_event(evt1, evt2):
     if evt1['url'] and evt2['url'] and evt1['url'] != '#' and evt1['url'] == evt2['url']:
@@ -142,9 +147,9 @@ def is_same_event(evt1, evt2):
 
 def add_event_smart(new_event):
     date_key = new_event['start']
-    if date_key not in master_events: master_events[date_key] = []
+    if date_key not in stored_events: stored_events[date_key] = []
     merged = False
-    for existing_event in master_events[date_key]:
+    for existing_event in stored_events[date_key]:
         if is_same_event(new_event, existing_event):
             new_rank = SOURCE_RANK.get(new_event['extendedProps']['source'], 99)
             old_rank = SOURCE_RANK.get(existing_event['extendedProps']['source'], 99)
@@ -157,7 +162,7 @@ def add_event_smart(new_event):
                 existing_event['extendedProps']['categories'] = new_event['extendedProps']['categories'] 
             merged = True
             break
-    if not merged: master_events[date_key].append(new_event)
+    if not merged: stored_events[date_key].append(new_event)
 
 # --- PART 4: LOAD DATA ---
 def load_source(filename, source_name):
@@ -219,7 +224,9 @@ def generate_html(events):
     src_pills_list = []
     for src in sources_list:
         color_config = SOURCE_COLORS.get(src, {'bg': '#3788d8', 'text': 'white'})
-        src_pills_list.append(f'<button class="filter-btn" data-type="source" data-value="{src}" data-color="{color_config["bg"]}" data-text="{color_config["text"]}">{src}</button>')
+        # Use simple concatenation
+        pill_html = '<button class="filter-btn" data-type="source" data-value="' + src + '" data-color="' + color_config["bg"] + '" data-text="' + color_config["text"] + '">' + src + '</button>'
+        src_pills_list = src_pills_list + [pill_html]
     src_pills = " ".join(src_pills_list)
 
     html_content = f"""<!DOCTYPE html>
@@ -233,9 +240,9 @@ def generate_html(events):
     <style>
       html, body {{ margin: 0; padding: 0; min-height: 100%; background-color: #f8f9fa; }}
       body {{ font-family: 'Inter', sans-serif; -webkit-overflow-scrolling: touch; }}
-      #calendar {{ max-width: 1100px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }}
+      #calendar {{ max-width: 1100px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; }}
       .fc-event {{ cursor: pointer; border: none; }}
-      .filter-container {{ background: white; padding: 1.5rem; border-radius: 0.8rem; box-shadow: 0 4px 20px -5px rgb(0 0 0 / 0.1); margin-bottom: 2rem; }}
+      .filter-container {{ background: white; padding: 1.5rem; border-radius: 0.8rem; margin-bottom: 2rem; }}
       .filter-section {{ margin-bottom: 1.2rem; }}
       .filter-label {{ display: block; font-size: 0.85rem; font-weight: 700; color: #4b5563; margin-bottom: 0.6rem; text-transform: uppercase; letter-spacing: 0.025em; }}
       .pills-wrapper {{ display: flex; flex-wrap: wrap; gap: 0.6rem; }}
@@ -243,13 +250,13 @@ def generate_html(events):
       .filter-btn:hover {{ border-color: #3b82f6; background: #eff6ff; }}
       
       /* Active state for Category pills */
-      [data-type="category"].filter-btn.active {{ background: #3b82f6; color: white; border-color: #3b82f6; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3); }}
+      [data-type="category"].filter-btn.active {{ background: #3b82f6; color: white; border-color: #3b82f6; }}
       
       /* Active state for Source pills */
       [data-type="source"].filter-btn.active {{ border-color: transparent; }}
 
       #search-container {{ position: relative; margin-bottom: 1.5rem; }}
-      #search-input {{ width: 100%; padding: 0.75rem 1rem; padding-left: 2.5rem; border: 1px solid #d1d5db; border-radius: 0.5rem; font-size: 1rem; box-shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.05); }}
+      #search-input {{ width: 100%; padding: 0.75rem 1rem; padding-left: 2.5rem; border: 1px solid #d1d5db; border-radius: 0.5rem; font-size: 1rem; }}
       .search-icon {{ position: absolute; left: 0.8rem; top: 0.8rem; color: #9ca3af; }}
       #main-wrapper {{ padding: 20px; max-width: 1200px; margin: 0 auto; overflow-x: hidden; }}
       
@@ -260,18 +267,23 @@ def generate_html(events):
         #mobile-filter-toggle {{ display: flex !important; }}
         .fc-toolbar {{ flex-direction: column; gap: 10px; }}
         #calendar {{ padding: 10px; }}
+        /* Make the time column in list view much narrower for tags */
+        .fc-list-event-time {{ width: 85px !important; min-width: 85px !important; padding: 4px !important; vertical-align: top !important; }}
       }}
-      @media (min-width: 769px) {{ #mobile-filter-toggle {{ display: none; }} }}
+      @media (min-width: 769px) {{ 
+        #mobile-filter-toggle {{ display: none; }} 
+        .fc-list-event-time {{ width: 120px !important; min-width: 120px !important; vertical-align: middle !important; }}
+      }}
     </style>
   </head>
   <body>
     <div id="main-wrapper">
         <div class="mb-6">
-            <h1 class="text-3xl md:text-4xl font-black text-slate-900 mb-1">Lander Community Calendar</h1>
+            <h1 class="text-3xl md:text-4xl font-black text-slate-900 mb-1">Lander Mega Calendar</h1>
             <p class="text-slate-500 font-medium text-sm md:text-base">Aggregated events from local community sources.</p>
         </div>
 
-        <button id="mobile-filter-toggle" class="w-full bg-slate-800 text-white font-bold py-3 px-4 rounded-lg mb-4 flex justify-between items-center shadow-lg active:scale-95 transition-transform" style="display:none;">
+        <button id="mobile-filter-toggle" class="w-full bg-slate-800 text-white font-bold py-3 px-4 rounded-lg mb-4 flex justify-between items-center active:scale-95 transition-transform" style="display:none;">
             <span>🔍 Search & Filters</span>
             <span id="toggle-icon">▼</span>
         </button>
@@ -398,15 +410,15 @@ def generate_html(events):
                 eventDidMount: function(info) {{
                     info.el.title = info.event.title + " (" + info.event.extendedProps.source + ")";
                     if (info.view.type.includes('list')) {{
-                        var titleEl = info.el.querySelector('.fc-list-event-title');
-                        if (titleEl) {{
-                            // Clear existing tags potentially injected by previous mounts
-                            const existingTags = titleEl.querySelector('.event-tags');
-                            if (existingTags) existingTags.remove();
-
+                        // Support list view items - REPLACE "all-day" with tags
+                        var timeEl = info.el.querySelector('.fc-list-event-time');
+                        if (timeEl) {{
+                            timeEl.innerText = ''; // Remove "all-day"
+                            
                             var tagContainer = document.createElement('div');
-                            tagContainer.className = 'event-tags';
-                            tagContainer.style.marginBottom = '2px';
+                            tagContainer.style.display = 'flex';
+                            tagContainer.style.flexDirection = 'column';
+                            tagContainer.style.gap = '2px';
                             
                             var cats = info.event.extendedProps.categories;
                             (cats || []).forEach(function(cat) {{
@@ -418,16 +430,10 @@ def generate_html(events):
                                 else if (cat.includes('Community')) {{ bg = '#dbeafe'; text = '#1e40af'; }}
                                 else if (cat.includes('School')) {{ bg = '#fef9c3'; text = '#854d0e'; }}
                                 else if (cat.includes('Food')) {{ bg = '#ffedd5'; text = '#9a3412'; }}
-                                span.style.cssText = 'display: inline-block; padding: 0px 5px; margin-right: 3px; border-radius: 3px; font-size: 0.6em; font-weight: 800; text-transform: uppercase; background:' + bg + '; color:' + text + ';line-height:1.4;';
+                                span.style.cssText = 'display: inline-block; padding: 1px 4px; border-radius: 4px; font-size: 0.6em; font-weight: 800; text-transform: uppercase; background:' + bg + '; color:' + text + '; text-align: center; white-space: nowrap; overflow: hidden; text-ellipsis: true;';
                                 tagContainer.appendChild(span);
                             }});
-                            
-                            var link = titleEl.querySelector('a');
-                            if (link) {{
-                                titleEl.insertBefore(tagContainer, link);
-                            }} else {{
-                                titleEl.prepend(tagContainer);
-                            }}
+                            timeEl.appendChild(tagContainer);
                         }}
                     }}
                 }},
@@ -504,8 +510,8 @@ def main():
     load_source("cwc_data.json", "CWC")
     load_source("windriver_data.json", "WRVC")
     load_source("county10_data.json", "County 10")
-    final_list = [e for dl in master_events.values() for e in dl]
-    print(f"Total Unique Events: {{len(final_list)}}")
+    final_list = [e for dl in stored_events.values() for e in dl]
+    print(f"Total Unique Events: {len(final_list)}")
     generate_html(final_list)
 
 if __name__ == "__main__":
