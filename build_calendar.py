@@ -249,10 +249,18 @@ def generate_html(events):
       [data-type="source"].filter-btn.active {{ border-color: transparent; }}
 
       #search-container {{ position: relative; margin-bottom: 1.5rem; }}
-      #search-input {{ width: 100%; padding: 0.75rem 1rem; padding-left: 2.5rem; border: 1px solid #d1d5db; border-radius: 0.5rem; font-size: 1rem; shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.05); }}
+      #search-input {{ width: 100%; padding: 0.75rem 1rem; padding-left: 2.5rem; border: 1px solid #d1d5db; border-radius: 0.5rem; font-size: 1rem; box-shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.05); }}
       .search-icon {{ position: absolute; left: 0.8rem; top: 0.8rem; color: #9ca3af; }}
       #main-wrapper {{ padding: 20px; max-width: 1200px; margin: 0 auto; }}
-      @media (max-width: 768px) {{ #main-wrapper {{ padding: 10px; }} }}
+      
+      @media (max-width: 768px) {{ 
+        #main-wrapper {{ padding: 10px; }}
+        .filter-container {{ display: none; margin-bottom: 1rem; }}
+        .filter-container.show {{ display: block; }}
+        #mobile-filter-toggle {{ display: block; }}
+        .fc-toolbar {{ flex-direction: column; gap: 10px; }}
+      }}
+      @media (min-width: 769px) {{ #mobile-filter-toggle {{ display: none; }} }}
     </style>
   </head>
   <body>
@@ -262,7 +270,12 @@ def generate_html(events):
             <p class="text-slate-500 font-medium whitespace-nowrap overflow-hidden text-ellipsis">Aggregated events from LVHS, Chamber, CWC, Wind River, and County 10.</p>
         </div>
 
-        <div class="filter-container">
+        <button id="mobile-filter-toggle" class="w-full bg-slate-800 text-white font-bold py-3 px-4 rounded-lg mb-4 flex justify-between items-center">
+            <span>🔍 Filters & Search</span>
+            <span id="toggle-icon">▼</span>
+        </button>
+
+        <div class="filter-container" id="filter-panel">
             <div id="search-container">
                 <span class="search-icon">🔍</span>
                 <input type="text" id="search-input" placeholder="Search events...">
@@ -330,6 +343,17 @@ def generate_html(events):
         }}
 
         document.addEventListener('DOMContentLoaded', function() {{
+            // Mobile toggle logic
+            const toggleBtn = document.getElementById('mobile-filter-toggle');
+            const filterPanel = document.getElementById('filter-panel');
+            const toggleIcon = document.getElementById('toggle-icon');
+
+            toggleBtn.addEventListener('click', function() {{
+                filterPanel.classList.toggle('show');
+                toggleIcon.innerText = filterPanel.classList.contains('show') ? '▲' : '▼';
+                setTimeout(sendHeight, 300);
+            }});
+
             var calendarEl = document.getElementById('calendar');
             applySourceStyles();
             
@@ -365,9 +389,13 @@ def generate_html(events):
                 eventDidMount: function(info) {{
                     info.el.title = info.event.title + " (" + info.event.extendedProps.source + ")";
                     if (info.view.type.includes('list')) {{
-                        var timeEl = info.el.querySelector('.fc-list-event-time');
-                        if (timeEl) {{
-                            timeEl.innerText = '';
+                        // Support list view items
+                        var titleEl = info.el.querySelector('.fc-list-event-title');
+                        if (titleEl) {{
+                            // Prepend tags to title without breaking the title cell
+                            var tagContainer = document.createElement('div');
+                            tagContainer.style.marginBottom = '4px';
+                            
                             var cats = info.event.extendedProps.categories;
                             (cats || []).forEach(function(cat) {{
                                 var span = document.createElement('span');
@@ -378,9 +406,17 @@ def generate_html(events):
                                 else if (cat.includes('Community')) {{ bg = '#dbeafe'; text = '#1e40af'; }}
                                 else if (cat.includes('School')) {{ bg = '#fef9c3'; text = '#854d0e'; }}
                                 else if (cat.includes('Food')) {{ bg = '#ffedd5'; text = '#9a3412'; }}
-                                span.style.cssText = 'display: inline-block; padding: 2px 8px; margin-right: 4px; border-radius: 12px; font-size: 0.7em; font-weight: 700; text-transform: uppercase; background:' + bg + '; color:' + text + ';';
-                                timeEl.appendChild(span);
+                                span.style.cssText = 'display: inline-block; padding: 1px 6px; margin-right: 4px; border-radius: 4px; font-size: 0.65em; font-weight: 700; text-transform: uppercase; background:' + bg + '; color:' + text + ';';
+                                tagContainer.appendChild(span);
                             }});
+                            
+                            // Insert before the title text link
+                            var link = titleEl.querySelector('a');
+                            if (link) {{
+                                titleEl.insertBefore(tagContainer, link);
+                            }} else {{
+                                titleEl.prepend(tagContainer);
+                            }}
                         }}
                     }}
                 }},
