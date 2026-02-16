@@ -37,7 +37,7 @@ CATEGORY_WEIGHTS = {
         "source_boost": {"LVHS": 2, "WRVC": 2}
     },
     "Arts & Culture": {
-        "keywords": ["concert", "play", "theater", "theatre", "art", "painting", "drawing", "music", "opera", "symphony", "choir", "band", "jazz", "performance", "exhibit", "gallery", "film", "movie", "screening", "dance", "recital"],
+        "keywords": ["concert", "play", "theater", "theatre", "art", "painting", "drawing", "music", "opera", "symphony", "choir", "band", "jazz", "performance", "exhibit", "gallery", "film", "movie", "screening", "dance", "recital", "jam", "pottery", "ceramics", "craft", "art center", "quilting", "stitch", "sew", "weaving"],
         "source_boost": {"CWC": 1}
     },
     "Community & Social": {
@@ -102,7 +102,7 @@ def get_categories(title, source):
         # 2. Keyword Match
         keywords = data.get("keywords", [])
         kw_matches = [k for k in keywords if k in title_lower]
-        keyword_score = len(kw_matches) * 2
+        keyword_score = len(kw_matches) * 4
         
         total_score = boost_val + keyword_score
         scoring_results.append((cat, total_score))
